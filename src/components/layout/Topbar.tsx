@@ -1,14 +1,22 @@
 import Link from "next/link";
 import { Search, Bell, Plus } from "lucide-react";
+import MobileNav from "./MobileNav";
+
+type NavUser = { name?: string | null; email?: string | null; role?: string | null };
 
 export default function Topbar({
   canManageEmployees,
+  user,
 }: {
   // Only Admin/HR get the quick "Add employee" shortcut.
   canManageEmployees: boolean;
+  user: NavUser;
 }) {
   return (
-    <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b border-border bg-surface/80 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b border-border bg-surface/80 px-4 backdrop-blur-md md:gap-4 md:px-6">
+      {/* Mobile menu button (hidden on desktop, where the sidebar is visible) */}
+      <MobileNav user={user} />
+
       {/* Search box */}
       <div className="relative flex-1 max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />

@@ -39,7 +39,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         never reveal WHICH part was wrong — that would help attackers).
       */
       async authorize(credentials) {
-        const email = credentials?.email as string | undefined;
+        // Normalize the email (trim + lowercase) so a stray space or an
+        // auto-capitalized first letter still matches the stored account.
+        const email = (credentials?.email as string | undefined)?.trim().toLowerCase();
         const password = credentials?.password as string | undefined;
 
         if (!email || !password) return null;
