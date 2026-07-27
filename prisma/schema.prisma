@@ -1,0 +1,171 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (6543) — runtime
+  directUrl = env("DIRECT_URL")   // direct/session (5432) — migrations
+}
+
+// A "User" is someone who can LOG IN to the dashboard.
+// (This is different from an Employee, which is just a record we manage.
+//  Later, an Employee could optionally be linked to a User account.)
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique              // login identifier — no duplicates
+  passwordHash String                         // bcrypt hash — we NEVER store the raw password
+  role         String    @default("Employee") // Admin | HR | Manager | Employee
+  // Optional link to the Employee record this login belongs to. @unique makes
+  // it one-to-one (an employee can't be claimed by two accounts). If the
+  // employee record is deleted, this link is cleared (SetNull), not the login.
+  employeeId   String?   @unique
+  employee     Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// A "Department" is a team in the company (Engineering, Sales, …).
+model Department {
+  id          String   @id @default(cuid())
+  name        String   @unique              // no two departments share a name
+  description String?                        // optional blurb ("?" = nullable)
+  employees   Employee[]                     // back-relation: all employees in this dept
+  jobs        Job[]                          // back-relation: open positions in this dept
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// An "Employee" record in the database. Each field below becomes
+// a column in the employees table.
+model Employee {
+  id           String      @id @default(cuid()) // unique auto-generated id
+  name         String
+  email        String      @unique              // no two employees share an email
+  role         String
+  // Real relation to Department. Nullable so an employee can be "unassigned"
+  // (e.g. after their department is deleted). onDelete: SetNull means deleting
+  // a department clears this link instead of failing.
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  status       String      @default("Active")   // Active | On Leave | Remote
+  startedAt    String                           // ISO date, e.g. "2024-11-04"
+  // Annual paid-leave entitlement in days (Vacation + Personal count against it).
+  leaveAllowance Int       @default(20)
+  // Annual gross salary (SENSITIVE — only ever exposed on the Admin/HR payroll page).
+  salary       Int         @default(0)
+  leaveRequests LeaveRequest[]                   // back-relation: this person's time-off
+  attendance   AttendanceRecord[]                // back-relation: this person's daily attendance
+  reviews      PerformanceReview[]               // back-relation: this person's performance reviews
+  payslips     Payslip[]                          // back-relation: this person's payslips
+  user         User?                             // back-relation: the login account (if any)
+  createdAt    DateTime    @default(now())       // when the record was created
+  updatedAt    DateTime    @updatedAt            // auto-updates on every change
+}
+
+// A "PayRun" is one payroll cycle (e.g. "July 2026") that produces payslips.
+model PayRun {
+  id        String    @id @default(cuid())
+  period    String    @unique              // e.g. "2026-07" — one run per period
+  status    String    @default("Draft")    // Draft | Finalized
+  payslips  Payslip[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// A "Payslip" is one employee's pay for one run. Amounts are SNAPSHOTS taken
+// at generation time, so history stays correct even if the salary changes.
+model Payslip {
+  id         String   @id @default(cuid())
+  payRunId   String
+  payRun     PayRun   @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  gross      Int      // monthly gross (whole currency units)
+  deductions Int
+  net        Int
+  createdAt  DateTime @default(now())
+
+  @@unique([payRunId, employeeId]) // one payslip per employee per run
+}
+
+// A "Job" is an open (or closed) position we're hiring for.
+model Job {
+  id           String      @id @default(cuid())
+  title        String
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  location     String?
+  type         String      @default("Full-time") // Full-time | Part-time | Contract | Internship
+  status       String      @default("Open")      // Open | On hold | Closed
+  description  String?
+  candidates   Candidate[]                        // back-relation: applicants
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+// A "Candidate" is an applicant for a specific job.
+model Candidate {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  name      String
+  email     String?
+  stage     String   @default("Applied") // Applied | Screening | Interview | Offer | Hired | Rejected
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A "PerformanceReview" is one review of an employee for a period.
+model PerformanceReview {
+  id           String   @id @default(cuid())
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewerName String   // who wrote it (captured from the manager's account)
+  period       String   // e.g. "H1 2026", "Q2 2026"
+  rating       Int      // overall 1..5
+  strengths    String?  // what went well
+  goals        String?  // goals / areas to improve
+  status       String   @default("Draft") // Draft | Submitted | Acknowledged
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// An "AttendanceRecord" is one employee's attendance for one day.
+model AttendanceRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       String   // local day, ISO "YYYY-MM-DD"
+  clockIn    String?  // ISO datetime when they clocked in (null if not yet)
+  clockOut   String?  // ISO datetime when they clocked out (null if still in)
+  status     String   @default("Present") // Present | Late | Absent | Remote
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // One record per employee per day.
+  @@unique([employeeId, date])
+}
+
+// A "LeaveRequest" is one time-off request by an employee.
+model LeaveRequest {
+  id         String   @id @default(cuid())
+  employeeId String
+  // If the employee is deleted, their leave requests go with them (Cascade).
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       String   // Vacation | Sick | Personal | Unpaid
+  startDate  String   // ISO date, e.g. "2026-08-03"
+  endDate    String   // ISO date (inclusive)
+  days       Int      // number of days off (computed when created)
+  reason     String?  // optional note
+  status     String   @default("Pending") // Pending | Approved | Rejected
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

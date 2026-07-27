@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+  ─────────────────────────────────────────────────────────────
+  DESIGN SYSTEM — our colors & tokens, defined once, reused everywhere.
+  These become Tailwind utility classes, e.g. --color-surface  ->  bg-surface
+  ─────────────────────────────────────────────────────────────
+*/
+@theme {
+  /* Surfaces (backgrounds), darkest -> lightest */
+  --color-bg: #0a0a0c;          /* the page background (near-black) */
+  --color-surface: #141419;     /* cards, sidebar, top bar */
+  --color-surface-2: #1c1c23;   /* hover states, raised elements */
+
+  /* Lines & borders */
+  --color-border: #262630;      /* hairline borders between sections */
+
+  /* Text (ink) */
+  --color-ink: #f4f4f5;         /* main text — bright white-ish */
+  --color-ink-muted: #a1a1aa;   /* secondary text — grey */
+  --color-ink-faint: #6b6b76;   /* labels, captions — dim */
+
+  /* Accent — our electric blue (buttons, active menu, highlights) */
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2f6fe0;
+  --color-accent-soft: #172554; /* faint accent background */
+
+  /* Status colors (validated, colorblind-safe) */
+  --color-good: #0ca30c;
+  --color-warning: #fab219;
+  --color-critical: #d03b3b;
+
+  /* Chart series (validated, colorblind-safe set from the palette) */
+  --color-chart-1: #3987e5;
+  --color-chart-2: #199e70;
+  --color-chart-3: #c98500;
+  --color-chart-4: #9085e9;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Force dark mode app-wide and set the base page look */
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A soft custom scrollbar so even scrolling feels polished */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
