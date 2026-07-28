@@ -1,17 +1,21 @@
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
+import { authConfig } from "@/auth.config";
 
 /*
   Route protection. In THIS version of Next.js the old `middleware.ts` file is
   deprecated and renamed to `proxy.ts` — same idea: code that runs on the
   server before a page renders.
 
-  We wrap it with Auth.js's `auth()` helper, which reads the session and hangs
-  it on `req.auth`. Then we redirect based on login state.
+  IMPORTANT: we build `auth` here from the LIGHTWEIGHT config (no Prisma, no
+  bcrypt), so this gate — which runs on EVERY request — stays tiny and
+  cold-starts fast. It only READS the session cookie to decide redirects.
 
-  Note: this is a fast "optimistic" gate for good UX. It is NOT the only line of
+  This is a fast "optimistic" gate for good UX. It is NOT the only line of
   defense — pages and server actions still check the session close to the data.
 */
+const { auth } = NextAuth(authConfig);
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const isOnLogin = req.nextUrl.pathname === "/login";
