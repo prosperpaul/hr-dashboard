@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Users, LogOut, Menu, X } from "lucide-react";
@@ -19,6 +20,10 @@ function initialsOf(name?: string | null): string {
 export default function MobileNav({ user }: { user: NavUser }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // We render the drawer through a portal on document.body so it isn't trapped
+  // inside the top bar's backdrop-blur (which would break `position: fixed`).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Close the drawer whenever we navigate to a new page.
   useEffect(() => {
@@ -49,7 +54,7 @@ export default function MobileNav({ user }: { user: NavUser }) {
         <Menu className="h-5 w-5" />
       </button>
 
-      {open && (
+      {mounted && open && createPortal(
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
@@ -148,7 +153,8 @@ export default function MobileNav({ user }: { user: NavUser }) {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
