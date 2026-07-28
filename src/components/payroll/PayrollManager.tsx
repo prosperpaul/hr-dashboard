@@ -91,11 +91,11 @@ export default function PayrollManager({
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                  <th className="px-5 py-3 font-medium">Employee</th>
-                  <th className="px-5 py-3 font-medium">Department</th>
-                  <th className="px-5 py-3 font-medium text-right">Annual</th>
-                  <th className="px-5 py-3 font-medium text-right">Monthly</th>
-                  <th className="px-5 py-3 font-medium text-right">Actions</th>
+                  <th className="px-4 py-3 font-medium sm:px-5">Employee</th>
+                  <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Department</th>
+                  <th className="px-4 py-3 font-medium text-right sm:px-5">Annual</th>
+                  <th className="hidden px-4 py-3 font-medium text-right sm:table-cell sm:px-5">Monthly</th>
+                  <th className="px-4 py-3 font-medium text-right sm:px-5">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,14 +109,14 @@ export default function PayrollManager({
                         <span className="font-medium text-ink">{s.name}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-ink-muted">{s.department}</td>
-                    <td className="px-5 py-3 text-right text-ink">
+                    <td className="hidden px-4 py-3 text-ink-muted md:table-cell sm:px-5">{s.department}</td>
+                    <td className="px-4 py-3 text-right text-ink sm:px-5">
                       {s.salary > 0 ? formatMoney(s.salary) : <span className="text-ink-faint">Not set</span>}
                     </td>
-                    <td className="px-5 py-3 text-right text-ink-muted">
+                    <td className="hidden px-4 py-3 text-right text-ink-muted sm:table-cell sm:px-5">
                       {s.salary > 0 ? formatMoney(Math.round(s.salary / 12)) : "—"}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-3 sm:px-5">
                       <div className="flex justify-end">
                         <button
                           onClick={() => {
@@ -222,19 +222,19 @@ export default function PayrollManager({
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                        <th className="px-5 py-3 font-medium">Employee</th>
-                        <th className="px-5 py-3 font-medium text-right">Gross</th>
-                        <th className="px-5 py-3 font-medium text-right">Deductions</th>
-                        <th className="px-5 py-3 font-medium text-right">Net</th>
+                        <th className="px-4 py-3 font-medium sm:px-5">Employee</th>
+                        <th className="hidden px-4 py-3 font-medium text-right sm:table-cell sm:px-5">Gross</th>
+                        <th className="hidden px-4 py-3 font-medium text-right md:table-cell sm:px-5">Deductions</th>
+                        <th className="px-4 py-3 font-medium text-right sm:px-5">Net</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedRun.payslips.map((p) => (
                         <tr key={p.id} className="border-b border-border last:border-0 hover:bg-surface-2">
-                          <td className="px-5 py-3 font-medium text-ink">{p.employeeName}</td>
-                          <td className="px-5 py-3 text-right text-ink-muted">{formatMoney(p.gross)}</td>
-                          <td className="px-5 py-3 text-right text-critical">−{formatMoney(p.deductions)}</td>
-                          <td className="px-5 py-3 text-right font-medium text-ink">{formatMoney(p.net)}</td>
+                          <td className="px-4 py-3 font-medium text-ink sm:px-5">{p.employeeName}</td>
+                          <td className="hidden px-4 py-3 text-right text-ink-muted sm:table-cell sm:px-5">{formatMoney(p.gross)}</td>
+                          <td className="hidden px-4 py-3 text-right text-critical md:table-cell sm:px-5">−{formatMoney(p.deductions)}</td>
+                          <td className="px-4 py-3 text-right font-medium text-ink sm:px-5">{formatMoney(p.net)}</td>
                         </tr>
                       ))}
                     </tbody>

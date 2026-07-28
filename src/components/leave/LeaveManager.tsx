@@ -198,13 +198,13 @@ export default function LeaveManager({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                <th className="px-5 py-3 font-medium">Employee</th>
-                <th className="px-5 py-3 font-medium">Type</th>
-                <th className="px-5 py-3 font-medium">Dates</th>
-                <th className="px-5 py-3 font-medium">Days</th>
-                <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Employee</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Type</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell sm:px-5">Dates</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell sm:px-5">Days</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Status</th>
                 {(canManage || isSelf) && (
-                  <th className="px-5 py-3 font-medium text-right">Actions</th>
+                  <th className="px-4 py-3 font-medium text-right sm:px-5">Actions</th>
                 )}
               </tr>
             </thead>
@@ -227,10 +227,10 @@ export default function LeaveManager({
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-ink-muted">{r.type}</td>
-                  <td className="px-5 py-3 text-ink-muted">{formatRange(r.startDate, r.endDate)}</td>
-                  <td className="px-5 py-3 text-ink-muted">{r.days}</td>
-                  <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
+                  <td className="hidden px-4 py-3 text-ink-muted md:table-cell sm:px-5">{r.type}</td>
+                  <td className="hidden px-4 py-3 text-ink-muted sm:table-cell sm:px-5">{formatRange(r.startDate, r.endDate)}</td>
+                  <td className="hidden px-4 py-3 text-ink-muted lg:table-cell sm:px-5">{r.days}</td>
+                  <td className="px-4 py-3 sm:px-5"><StatusBadge status={r.status} /></td>
                   {(canManage || isSelf) && (
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">

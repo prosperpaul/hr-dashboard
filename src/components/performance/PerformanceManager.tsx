@@ -152,12 +152,12 @@ export default function PerformanceManager({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                <th className="px-5 py-3 font-medium">Employee</th>
-                <th className="px-5 py-3 font-medium">Period</th>
-                <th className="px-5 py-3 font-medium">Rating</th>
-                <th className="px-5 py-3 font-medium">Reviewer</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Employee</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell sm:px-5">Period</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Rating</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell sm:px-5">Reviewer</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Status</th>
+                <th className="px-4 py-3 font-medium text-right sm:px-5">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -171,10 +171,10 @@ export default function PerformanceManager({
                       <span className="font-medium text-ink">{r.employeeName}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-ink-muted">{r.period}</td>
-                  <td className="px-5 py-3"><Stars rating={r.rating} /></td>
-                  <td className="px-5 py-3 text-ink-muted">{r.reviewerName}</td>
-                  <td className="px-5 py-3"><ReviewStatusBadge status={r.status} /></td>
+                  <td className="hidden px-4 py-3 text-ink-muted sm:table-cell sm:px-5">{r.period}</td>
+                  <td className="hidden px-4 py-3 md:table-cell sm:px-5"><Stars rating={r.rating} /></td>
+                  <td className="hidden px-4 py-3 text-ink-muted lg:table-cell sm:px-5">{r.reviewerName}</td>
+                  <td className="px-4 py-3 sm:px-5"><ReviewStatusBadge status={r.status} /></td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1">
                       {r.status === "Draft" && (

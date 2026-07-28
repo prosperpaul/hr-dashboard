@@ -147,11 +147,11 @@ export default function UsersManager({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                <th className="px-5 py-3 font-medium">User</th>
-                <th className="px-5 py-3 font-medium">Role</th>
-                <th className="px-5 py-3 font-medium">Employee record</th>
-                <th className="px-5 py-3 font-medium">Created</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium sm:px-5">User</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Role</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Employee record</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell sm:px-5">Created</th>
+                <th className="px-4 py-3 font-medium text-right sm:px-5">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -180,8 +180,8 @@ export default function UsersManager({
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3"><RoleBadge role={u.role} /></td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-3 sm:px-5"><RoleBadge role={u.role} /></td>
+                    <td className="hidden px-4 py-3 md:table-cell sm:px-5">
                       {u.employeeName ? (
                         <span className="inline-flex items-center gap-1.5 text-ink-muted">
                           <LinkIcon className="h-3.5 w-3.5 text-ink-faint" />
@@ -191,7 +191,7 @@ export default function UsersManager({
                         <span className="text-ink-faint">Not linked</span>
                       )}
                     </td>
-                    <td className="px-5 py-3 text-ink-muted">{formatDate(u.createdAt)}</td>
+                    <td className="hidden px-4 py-3 text-ink-muted lg:table-cell sm:px-5">{formatDate(u.createdAt)}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button

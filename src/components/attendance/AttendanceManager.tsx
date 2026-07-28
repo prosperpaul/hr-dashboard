@@ -85,12 +85,12 @@ export default function AttendanceManager({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                <th className="px-5 py-3 font-medium">Employee</th>
-                <th className="px-5 py-3 font-medium">Clock in</th>
-                <th className="px-5 py-3 font-medium">Clock out</th>
-                <th className="px-5 py-3 font-medium">Hours</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Employee</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell sm:px-5">Clock in</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Clock out</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell sm:px-5">Hours</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Status</th>
+                <th className="px-4 py-3 font-medium text-right sm:px-5">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -107,12 +107,12 @@ export default function AttendanceManager({
                       <span className="font-medium text-ink">{r.employeeName}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-ink-muted">{formatTime(r.clockIn)}</td>
-                  <td className="px-5 py-3 text-ink-muted">{formatTime(r.clockOut)}</td>
-                  <td className="px-5 py-3 text-ink-muted">
+                  <td className="hidden px-4 py-3 text-ink-muted sm:table-cell sm:px-5">{formatTime(r.clockIn)}</td>
+                  <td className="hidden px-4 py-3 text-ink-muted md:table-cell sm:px-5">{formatTime(r.clockOut)}</td>
+                  <td className="hidden px-4 py-3 text-ink-muted lg:table-cell sm:px-5">
                     {formatDuration(minutesWorked(r.clockIn, r.clockOut))}
                   </td>
-                  <td className="px-5 py-3"><AttendanceStatusBadge status={r.status} /></td>
+                  <td className="px-4 py-3 sm:px-5"><AttendanceStatusBadge status={r.status} /></td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end">
                       <button

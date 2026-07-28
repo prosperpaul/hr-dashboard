@@ -172,12 +172,12 @@ export default function EmployeesManager({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
-                <th className="px-5 py-3 font-medium">Employee</th>
-                <th className="px-5 py-3 font-medium">Role</th>
-                <th className="px-5 py-3 font-medium">Department</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Start date</th>
-                {canManage && <th className="px-5 py-3 font-medium text-right">Actions</th>}
+                <th className="px-4 py-3 font-medium sm:px-5">Employee</th>
+                <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Role</th>
+                <th className="hidden px-4 py-3 font-medium lg:table-cell sm:px-5">Department</th>
+                <th className="px-4 py-3 font-medium sm:px-5">Status</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell sm:px-5">Start date</th>
+                {canManage && <th className="px-4 py-3 font-medium text-right sm:px-5">Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -197,10 +197,10 @@ export default function EmployeesManager({
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-ink-muted">{e.role}</td>
-                  <td className="px-5 py-3 text-ink-muted">{e.department}</td>
-                  <td className="px-5 py-3"><StatusBadge status={e.status} /></td>
-                  <td className="px-5 py-3 text-ink-muted">{formatDate(e.startedAt)}</td>
+                  <td className="hidden px-4 py-3 text-ink-muted md:table-cell sm:px-5">{e.role}</td>
+                  <td className="hidden px-4 py-3 text-ink-muted lg:table-cell sm:px-5">{e.department}</td>
+                  <td className="px-4 py-3 sm:px-5"><StatusBadge status={e.status} /></td>
+                  <td className="hidden px-4 py-3 text-ink-muted sm:table-cell sm:px-5">{formatDate(e.startedAt)}</td>
                   {canManage && (
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1">
