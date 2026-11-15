@@ -37,9 +37,11 @@ export default auth((req) => {
   Which paths this runs on. We EXCLUDE:
     - /api/*          (includes Auth.js's own /api/auth endpoints — must stay open)
     - _next/static, _next/image  (build assets)
-    - favicon.ico and image files
+    - favicon.ico, icon.svg and other image files
+    - /apple-icon  (generated home-screen icon; it has no file extension, so
+                    the image-file rule wouldn't catch it)
   Everything else (all real pages) goes through the check above.
 */
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|ico)$).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|apple-icon|.*\\.(?:png|jpg|jpeg|svg|ico)$).*)"],
 };

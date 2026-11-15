@@ -17,17 +17,19 @@ export default function Topbar({
   user,
   notifications,
   now,
+  badges = {},
 }: {
   // Only Admin/HR get the quick "Add employee" shortcut.
   canManageEmployees: boolean;
   user: NavUser;
   notifications: Notification[];
   now: string; // ISO time from the server, for "2h ago" labels
+  badges?: Record<string, number>; // e.g. { "/leave": 3 } — shown on mobile menu tiles
 }) {
   return (
     <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur-xl md:px-8">
       {/* Mobile menu button (hidden on desktop, where the sidebar is visible) */}
-      <MobileNav user={user} />
+      <MobileNav user={user} badges={badges} />
 
       {/* Search box (hidden on the smallest screens to keep the header tidy) */}
       <div className="relative hidden w-72 sm:block">

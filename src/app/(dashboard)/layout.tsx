@@ -44,6 +44,7 @@ export default async function DashboardLayout({
           user={session.user}
           notifications={items}
           now={new Date().toISOString()}
+          badges={{ "/leave": pendingLeave }}
         />
         <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
           <div className="mx-auto w-full max-w-[1440px]">{children}</div>
