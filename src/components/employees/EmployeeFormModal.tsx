@@ -35,24 +35,30 @@ export default function EmployeeFormModal({
   const [error, setError] = useState("");
 
   // When the panel opens, fill it: with the employee's data (edit) or blank (add).
-  useEffect(() => {
-    if (!open) return;
-    if (editing) {
-      setForm({
-        name: editing.name,
-        email: editing.email,
-        role: editing.role,
-        departmentId: editing.departmentId ?? "",
-        status: editing.status,
-        startedAt: editing.startedAt,
-        leaveAllowance: String(editing.leaveAllowance),
-      });
-    } else {
-      // Default a new employee to the first department in the list.
-      setForm({ ...emptyForm, departmentId: departments[0]?.id ?? "" });
+  // Reset the form each time the panel opens. This runs during render at the
+  // moment `open` flips to true (React's recommended way to respond to a prop
+  // change) instead of in an effect, which would render everything twice.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      if (editing) {
+        setForm({
+          name: editing.name,
+          email: editing.email,
+          role: editing.role,
+          departmentId: editing.departmentId ?? "",
+          status: editing.status,
+          startedAt: editing.startedAt,
+          leaveAllowance: String(editing.leaveAllowance),
+        });
+      } else {
+        // Default a new employee to the first department in the list.
+        setForm({ ...emptyForm, departmentId: departments[0]?.id ?? "" });
+      }
+      setError("");
     }
-    setError("");
-  }, [open, editing, departments]);
+  }
 
   // Close the panel when the Escape key is pressed.
   useEffect(() => {
@@ -101,24 +107,24 @@ export default function EmployeeFormModal({
   }
 
   const inputClass =
-    "w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/40";
+    "w-full rounded-lg border border-border bg-surface px-3 py-2 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent";
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Dark backdrop — clicking it closes the panel */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-md" onClick={onClose} />
 
       {/* The panel itself */}
-      <div className="relative flex h-full w-full max-w-md flex-col border-l border-border bg-surface shadow-2xl">
+      <div role="dialog" aria-modal="true" className="relative flex h-full w-full max-w-md flex-col border-l border-border-strong bg-surface-2 shadow-modal">
         <div className="flex items-center justify-between border-b border-border px-5 h-16">
-          <h2 className="text-base font-semibold text-ink">
+          <h2 className="text-headline-sm text-ink">
             {editing ? "Edit employee" : "Add employee"}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -204,7 +210,7 @@ export default function EmployeeFormModal({
             </div>
 
             {error && (
-              <p className="rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
+              <p role="alert" className="rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
                 {error}
               </p>
             )}
@@ -215,13 +221,13 @@ export default function EmployeeFormModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-border px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              className="h-9 rounded-lg border border-border bg-surface px-4 text-label-md text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+              className="h-9 rounded-lg bg-accent px-4 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed"
             >
               {editing ? "Save changes" : "Add employee"}
             </button>
@@ -236,7 +242,7 @@ export default function EmployeeFormModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-ink">{label}</span>
+      <span className="mb-1.5 block text-label-sm uppercase tracking-wider text-ink-faint">{label}</span>
       {children}
     </label>
   );

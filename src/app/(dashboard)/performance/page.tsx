@@ -25,9 +25,17 @@ export default async function PerformancePage() {
         orderBy: { createdAt: "desc" },
         include: { employee: { select: { name: true } } },
       }),
-      prisma.employee.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      prisma.employee.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, role: true, department: { select: { name: true } } },
+      }),
     ]);
-    return <PerformanceManager initialReviews={records.map(toRow)} employees={employees} />;
+    return (
+      <PerformanceManager
+        reviews={records.map(toRow)}
+        employees={employees.map((e) => ({ id: e.id, name: e.name, role: e.role, department: e.department?.name ?? null }))}
+      />
+    );
   }
 
   // --- Not a manager and not linked ---
@@ -52,6 +60,7 @@ function toRow(r: {
   strengths: string | null;
   goals: string | null;
   status: string;
+  updatedAt: Date;
 }): ReviewRow {
   return {
     id: r.id,
@@ -63,20 +72,21 @@ function toRow(r: {
     strengths: r.strengths,
     goals: r.goals,
     status: r.status,
+    updatedAt: r.updatedAt.toISOString(),
   };
 }
 
 function NotLinked() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Performance</h1>
-      <div className="grid place-items-center rounded-2xl border border-border bg-surface py-16 text-center">
+      <h1 className="text-headline-lg text-ink md:text-headline-xl">Performance</h1>
+      <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
         <div className="max-w-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-surface-2">
+          <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">
             <Award className="h-5 w-5 text-ink-faint" />
           </div>
-          <p className="mt-3 text-sm font-medium text-ink">Your account isn&apos;t linked yet</p>
-          <p className="mt-1 text-sm text-ink-muted">
+          <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>
+          <p className="mt-1 text-body-md text-ink-muted">
             Ask an administrator to link your login to your employee record, then
             your performance reviews will appear here.
           </p>

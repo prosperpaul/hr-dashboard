@@ -2,42 +2,143 @@
 
 /*
   ─────────────────────────────────────────────────────────────
-  DESIGN SYSTEM — our colors & tokens, defined once, reused everywhere.
+  DESIGN SYSTEM — "Obsidian Precision"
+  Our colors & tokens, defined once, reused everywhere.
   These become Tailwind utility classes, e.g. --color-surface  ->  bg-surface
+
+  The token NAMES stayed the same as before, only the VALUES changed —
+  so every page picks up the new look automatically.
   ─────────────────────────────────────────────────────────────
 */
 @theme {
-  /* Surfaces (backgrounds), darkest -> lightest */
-  --color-bg: #0a0a0c;          /* the page background (near-black) */
-  --color-surface: #141419;     /* cards, sidebar, top bar */
-  --color-surface-2: #1c1c23;   /* hover states, raised elements */
+  /* Surfaces — tonal layers instead of shadows, darkest -> lightest */
+  --color-bg: #090a0b;          /* Level 0: canvas (page background) */
+  --color-surface: #111315;     /* Level 1: cards, sidebar, top bar */
+  --color-surface-2: #17191c;   /* Level 2: inputs, dropdowns, modals, hover */
 
-  /* Lines & borders */
-  --color-border: #262630;      /* hairline borders between sections */
+  /* Hairline borders */
+  --color-border: #22262b;          /* default 1px partitions */
+  --color-border-strong: #2d3139;   /* hover / interactive / elevated */
 
   /* Text (ink) */
-  --color-ink: #f4f4f5;         /* main text — bright white-ish */
-  --color-ink-muted: #a1a1aa;   /* secondary text — grey */
-  --color-ink-faint: #6b6b76;   /* labels, captions — dim */
+  --color-ink: #f3f4f6;         /* primary text */
+  --color-ink-muted: #b0b6c0;   /* secondary labels, subtitles, icons */
+  --color-ink-faint: #858c98;   /* hints, timestamps, placeholders (lifted for readability) */
 
-  /* Accent — our electric blue (buttons, active menu, highlights) */
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2f6fe0;
-  --color-accent-soft: #172554; /* faint accent background */
+  /* Emerald accent — reserved for high-salience moments only */
+  --color-accent: #10b981;          /* primary buttons, active states */
+  --color-accent-hover: #34d399;    /* hover (brighter, per the spec) */
+  --color-accent-pressed: #059669;  /* active / pressed */
+  --color-accent-soft: rgb(16 185 129 / 0.1); /* faint emerald tint for badges */
+  --color-on-accent: #090a0b;       /* text/icons placed ON the emerald */
 
-  /* Status colors (validated, colorblind-safe) */
-  --color-good: #0ca30c;
+  /* Status colors */
+  --color-good: #10b981;
   --color-warning: #fab219;
-  --color-critical: #d03b3b;
+  --color-critical: #f87171;
 
-  /* Chart series (validated, colorblind-safe set from the palette) */
-  --color-chart-1: #3987e5;
-  --color-chart-2: #199e70;
+  /* Chart series (categorical) */
+  --color-chart-1: #10b981;
+  --color-chart-2: #3987e5;
   --color-chart-3: #c98500;
   --color-chart-4: #9085e9;
+  --color-chart-mint: #a7f3d0; /* pale emerald (2nd donut segment) */
+  --color-chart-sage: #86948a; /* grey-green (3rd donut segment) */
+
+  /*
+    Type scale. Each size also carries its line-height, tracking and weight,
+    so one class like `text-label-sm` sets all four at once.
+  */
+  --text-headline-xl: 36px;
+  --text-headline-xl--line-height: 44px;
+  --text-headline-xl--letter-spacing: -0.025em;
+  --text-headline-xl--font-weight: 600;
+  --text-headline-lg: 28px;
+  --text-headline-lg--line-height: 36px;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
+  --text-headline-md: 20px;
+  --text-headline-md--line-height: 28px;
+  --text-headline-md--letter-spacing: -0.015em;
+  --text-headline-md--font-weight: 600;
+  --text-headline-sm: 16px;
+  --text-headline-sm--line-height: 24px;
+  --text-headline-sm--letter-spacing: -0.01em;
+  --text-headline-sm--font-weight: 600;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-sm: 12px;
+  --text-body-sm--line-height: 16px;
+  --text-label-md: 13px;
+  --text-label-md--line-height: 18px;
+  --text-label-md--letter-spacing: 0.01em;
+  --text-label-md--font-weight: 500;
+  --text-label-sm: 11px;
+  --text-label-sm--line-height: 14px;
+  --text-label-sm--letter-spacing: 0.02em;
+  --text-label-sm--font-weight: 500;
+  --text-metric-lg: 32px;
+  --text-metric-lg--line-height: 38px;
+  --text-metric-lg--letter-spacing: -0.02em;
+  --text-metric-lg--font-weight: 600;
+  --text-metric-md: 24px;
+  --text-metric-md--line-height: 30px;
+  --text-metric-md--letter-spacing: -0.015em;
+  --text-metric-md--font-weight: 500;
+
+  /* Elevation shadows (Level 2 popovers, Level 3 modals) */
+  --shadow-popover: 0 12px 32px -4px rgb(0 0 0 / 0.65), 0 4px 12px -2px rgb(0 0 0 / 0.45);
+  --shadow-modal: 0 24px 48px -12px rgb(0 0 0 / 0.85);
 }
 
-/* Force dark mode app-wide and set the base page look */
+/*
+  ─────────────────────────────────────────────────────────────
+  LIGHT MODE
+  Dark is the default (the values in @theme above). When <html> has
+  data-theme="light", we swap the SAME token names to light values —
+  every bg-surface / text-ink / bg-accent class in the app follows
+  automatically, no component changes needed.
+
+  The emerald is darkened in light mode (#047857) so text and white
+  button labels stay readable on a white background.
+  ─────────────────────────────────────────────────────────────
+*/
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0f2f5;
+  --color-border: #e1e4e9;
+  --color-border-strong: #c9ced6;
+
+  --color-ink: #111827;
+  --color-ink-muted: #374151;
+  --color-ink-faint: #5b6472;
+
+  --color-accent: #047857;
+  --color-accent-hover: #065f46;
+  --color-accent-pressed: #064e3b;
+  --color-accent-soft: rgb(4 120 87 / 0.1);
+  --color-on-accent: #ffffff;
+
+  --color-good: #047857;
+  --color-warning: #b45309;
+  --color-critical: #dc2626;
+
+  --color-chart-mint: #6ee7b7;
+  --color-chart-sage: #94a3b8;
+
+  /* Pale tints used as TEXT on badges would vanish on white — darken them. */
+  --color-sky-300: #0369a1;
+  --color-violet-300: #6d28d9;
+  --color-indigo-300: #4338ca;
+
+  --shadow-popover: 0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 12px -4px rgb(15 23 42 / 0.1);
+  --shadow-modal: 0 24px 48px -12px rgb(15 23 42 / 0.25);
+}
+
+/* Dark is the default look. */
 html {
   color-scheme: dark;
 }
@@ -46,10 +147,19 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
 }
 
-/* A soft custom scrollbar so even scrolling feels polished */
+/*
+  Tabular figures: every digit takes the same width, so numbers in tables
+  and metrics line up vertically. Add the `tnum` class to any number.
+*/
+@utility tnum {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* Thin, quiet scrollbars */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;

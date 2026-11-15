@@ -67,6 +67,7 @@ export async function createLeaveRequest(data: LeaveInput): Promise<void> {
     },
   });
   revalidatePath("/leave");
+  revalidatePath("/", "layout"); // pending count on Overview + sidebar
 }
 
 // APPROVE / REJECT — change a request's status. Managers only (self-service
@@ -79,6 +80,9 @@ export async function setLeaveStatus(id: string, status: string): Promise<void> 
   }
   await prisma.leaveRequest.update({ where: { id }, data: { status } });
   revalidatePath("/leave");
+  // The Overview page lists pending requests and the sidebar shows a pending
+  // count, so refresh the whole dashboard layout too.
+  revalidatePath("/", "layout");
 }
 
 // DELETE — remove a request. Managers may delete any; a self-service user may
@@ -98,4 +102,5 @@ export async function deleteLeaveRequest(id: string): Promise<void> {
 
   await prisma.leaveRequest.delete({ where: { id } });
   revalidatePath("/leave");
+  revalidatePath("/", "layout"); // pending count on Overview + sidebar
 }

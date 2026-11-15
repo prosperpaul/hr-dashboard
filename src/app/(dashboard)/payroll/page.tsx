@@ -2,6 +2,7 @@ import { Receipt } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManagePayroll } from "@/lib/permissions";
+import { todayISO } from "@/lib/attendance";
 import type { SalaryRow, PayRunRow, MyPayslipRow } from "@/lib/payroll";
 import PayrollManager from "@/components/payroll/PayrollManager";
 import MyPayslips from "@/components/payroll/MyPayslips";
@@ -44,7 +45,9 @@ export default async function PayrollPage() {
       })),
     }));
 
-    return <PayrollManager salaries={salaries} payRuns={payRuns} />;
+    // Today's date is decided on the SERVER and passed down, so the server
+    // render and the browser render agree ("pays out in 5 days").
+    return <PayrollManager salaries={salaries} payRuns={payRuns} today={todayISO()} />;
   }
 
   // --- Self-service: a linked employee sees their own FINALIZED payslips ---
@@ -77,14 +80,14 @@ export default async function PayrollPage() {
 function NotLinked() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Payroll</h1>
-      <div className="grid place-items-center rounded-2xl border border-border bg-surface py-16 text-center">
+      <h1 className="text-headline-lg text-ink md:text-headline-xl">Payroll</h1>
+      <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
         <div className="max-w-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-surface-2">
+          <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">
             <Receipt className="h-5 w-5 text-ink-faint" />
           </div>
-          <p className="mt-3 text-sm font-medium text-ink">Your account isn&apos;t linked yet</p>
-          <p className="mt-1 text-sm text-ink-muted">
+          <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>
+          <p className="mt-1 text-body-md text-ink-muted">
             Ask an administrator to link your login to your employee record, then
             your payslips will appear here.
           </p>

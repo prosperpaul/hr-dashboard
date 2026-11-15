@@ -21,11 +21,32 @@ export default async function AttendancePage() {
 
   // --- Manager / HR / Admin: see EVERYONE's attendance ---
   if (canManage) {
-    const records = await prisma.attendanceRecord.findMany({
-      orderBy: [{ date: "desc" }, { clockIn: "asc" }],
-      include: { employee: { select: { name: true } } },
-    });
-    return <AttendanceManager initialRecords={records.map(toRow)} today={today} />;
+    // Records + the full staff list (so we can also show who has NOT
+    // clocked in on a given day), fetched in parallel.
+    const [records, employees] = await Promise.all([
+      prisma.attendanceRecord.findMany({
+        orderBy: [{ date: "desc" }, { clockIn: "asc" }],
+        include: { employee: { select: { name: true } } },
+      }),
+      prisma.employee.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, role: true, email: true, startedAt: true, department: { select: { name: true } } },
+      }),
+    ]);
+    return (
+      <AttendanceManager
+        records={records.map(toRow)}
+        employees={employees.map((e) => ({
+          id: e.id,
+          name: e.name,
+          role: e.role,
+          email: e.email,
+          startedAt: e.startedAt,
+          department: e.department?.name ?? null,
+        }))}
+        today={today}
+      />
+    );
   }
 
   // --- Not a manager and not linked ---
@@ -69,14 +90,14 @@ function toRow(r: {
 function NotLinked() {
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Attendance</h1>
-      <div className="grid place-items-center rounded-2xl border border-border bg-surface py-16 text-center">
+      <h1 className="text-headline-lg text-ink md:text-headline-xl">Attendance</h1>
+      <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
         <div className="max-w-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-surface-2">
+          <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">
             <Clock className="h-5 w-5 text-ink-faint" />
           </div>
-          <p className="mt-3 text-sm font-medium text-ink">Your account isn&apos;t linked yet</p>
-          <p className="mt-1 text-sm text-ink-muted">
+          <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>
+          <p className="mt-1 text-body-md text-ink-muted">
             Ask an administrator to link your login to your employee record, then
             you&apos;ll be able to clock in and out here.
           </p>

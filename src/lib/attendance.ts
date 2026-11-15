@@ -20,18 +20,44 @@ export type AttendanceRow = {
   status: string;
 };
 
-// The LOCAL calendar day as "YYYY-MM-DD" (not UTC, so "today" matches the user).
+/*
+  The business time zone. Servers (Vercel) run on UTC, but the workday is in
+  Lagos — so "today", "late after 09:15" and every displayed time must be
+  worked out in THIS zone, never the machine's. Using the same zone on the
+  server and in the browser also makes both render identical text.
+  (Later, for multiple customers, this becomes a per-company setting.)
+*/
+export const APP_TIME_ZONE = "Africa/Lagos";
+
+// "en-CA" formats dates as YYYY-MM-DD, which is exactly the shape we store.
+const dayFormat = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const clockFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: APP_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+const timeFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: APP_TIME_ZONE,
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+// Today's calendar day in the business time zone, as "YYYY-MM-DD".
 export function todayISO(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return dayFormat.format(d);
 }
 
-// Minutes since midnight (local) for an ISO datetime.
-function minutesOfDay(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
+// Minutes since midnight (business time zone) for an ISO datetime.
+export function minutesOfDay(iso: string): number {
+  const parts = clockFormat.formatToParts(new Date(iso));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return (get("hour") % 24) * 60 + get("minute");
 }
 
 // Was this clock-in late (after the threshold)?
@@ -60,8 +86,16 @@ export function formatTime(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return timeFormat.format(d); // always business time zone
 }
+
+// How many minutes after the 09:15 cut-off someone clocked in (0 if on time).
+export function minutesLate(clockInIso: string): number {
+  return Math.max(0, minutesOfDay(clockInIso) - LATE_AFTER_MINUTES);
+}
+
+// "9:15 AM" — the late threshold, for labels.
+export const LATE_AFTER_LABEL = `${Math.floor(LATE_AFTER_MINUTES / 60)}:${String(LATE_AFTER_MINUTES % 60).padStart(2, "0")} AM`;
 
 // "Mon, Jul 26" from a "YYYY-MM-DD" date.
 export function formatDay(dateISO: string): string {

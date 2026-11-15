@@ -22,13 +22,9 @@ export default function MobileNav({ user }: { user: NavUser }) {
   const [open, setOpen] = useState(false);
   // We render the drawer through a portal on document.body so it isn't trapped
   // inside the top bar's backdrop-blur (which would break `position: fixed`).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  // Close the drawer whenever we navigate to a new page.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  // It only renders after a tap (open = true), which never happens on the
+  // server, so document.body always exists by then. Every link closes the
+  // drawer in its onClick, so navigating closes it too.
 
   // Close on Escape, and lock background scroll while open.
   useEffect(() => {
@@ -54,42 +50,42 @@ export default function MobileNav({ user }: { user: NavUser }) {
         <Menu className="h-5 w-5" />
       </button>
 
-      {mounted && open && createPortal(
+      {open && createPortal(
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-bg/80 backdrop-blur-md" onClick={() => setOpen(false)} />
 
           {/* Drawer */}
-          <div className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] flex-col border-r border-border bg-surface shadow-2xl">
+          <div className="absolute left-0 top-0 flex h-full w-72 max-w-[82%] flex-col border-r border-border-strong bg-surface shadow-modal">
             {/* Brand + close */}
-            <div className="flex items-center justify-between border-b border-border px-5 h-16">
+            <div className="flex h-14 items-center justify-between border-b border-border px-4">
               <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-accent shadow-[0_0_20px_-2px_var(--color-accent)]">
-                  <Users className="h-5 w-5 text-white" />
+                <div className="grid h-7 w-7 place-items-center rounded-md bg-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]">
+                  <Users className="h-4 w-4 text-on-accent" />
                 </div>
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold text-ink">HR Dashboard</p>
-                  <p className="text-[11px] text-ink-faint">People operations</p>
+                  <p className="text-label-md text-ink">HR Dashboard</p>
+                  <p className="text-label-sm font-normal text-ink-faint">People operations</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close menu"
-                className="grid h-8 w-8 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
+                className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Nav links */}
-            <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4">
+            <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
               {navSections.map((section) => (
                 <div key={section.heading}>
-                  <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                  <p className="mb-1 px-2 text-label-sm uppercase tracking-wider text-ink-faint">
                     {section.heading}
                   </p>
-                  <ul className="space-y-1">
+                  <ul className="space-y-0.5">
                     {section.items
                       .filter((item) => !item.adminOnly || user.role === "Admin")
                       .map((item) => {
@@ -101,10 +97,10 @@ export default function MobileNav({ user }: { user: NavUser }) {
                               href={item.href}
                               onClick={() => setOpen(false)}
                               className={[
-                                "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                                "group flex items-center gap-2.5 rounded-r-lg border-l-2 px-2 py-2.5 text-label-md transition-colors",
                                 active
-                                  ? "bg-accent-soft font-medium text-ink ring-1 ring-accent/40"
-                                  : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                                  ? "border-accent bg-surface-2 text-ink"
+                                  : "border-transparent text-ink-muted hover:bg-surface-2 hover:text-ink",
                               ].join(" ")}
                             >
                               <Icon
@@ -130,16 +126,13 @@ export default function MobileNav({ user }: { user: NavUser }) {
 
             {/* User + sign out */}
             <div className="border-t border-border p-3">
-              <div className="flex items-center gap-2 rounded-lg px-2 py-2">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-accent to-chart-2 text-sm font-semibold text-white">
+              <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-2 p-2">
+                <div className="grid h-8 w-8 place-items-center rounded-full bg-accent-soft text-label-sm font-semibold text-accent-hover">
                   {initialsOf(user.name)}
                 </div>
                 <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-sm font-medium text-ink">{user.name ?? "User"}</p>
-                  <p className="truncate text-[11px] text-ink-faint">
-                    {user.role ? `${user.role} · ` : ""}
-                    {user.email}
-                  </p>
+                  <p className="truncate text-label-md text-ink">{user.name ?? "User"}</p>
+                  <p className="truncate text-label-sm font-normal text-ink-faint">{user.role ?? user.email}</p>
                 </div>
                 <form action={logout}>
                   <button

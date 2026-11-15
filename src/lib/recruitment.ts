@@ -27,6 +27,8 @@ export type CandidateRow = {
   email: string | null;
   stage: string;
   notes: string | null;
+  createdAt: string; // ISO — when they entered the pipeline
+  updatedAt: string; // ISO — last change (e.g. moved stage)
 };
 
 export type JobRow = {
@@ -38,6 +40,7 @@ export type JobRow = {
   type: string;
   status: string;
   description: string | null;
+  createdAt: string; // ISO — when the job was posted
   candidates: CandidateRow[];
 };
 

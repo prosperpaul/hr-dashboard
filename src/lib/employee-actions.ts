@@ -93,3 +93,55 @@ export async function deleteEmployee(id: string): Promise<void> {
   revalidatePath("/employees");
   revalidatePath("/departments");
 }
+
+/*
+  BULK actions for the selection bar on the Employees page.
+  Each one checks permission ONCE, validates the input, and changes every
+  selected employee in a single database statement — so a bulk change either
+  fully happens or fails as a whole (no half-updated lists).
+*/
+function cleanIds(ids: string[]): string[] {
+  const unique = [...new Set(ids.filter((id) => typeof id === "string" && id.length > 0))];
+  if (unique.length === 0) throw new Error("No employees selected.");
+  if (unique.length > 500) throw new Error("Please select 500 or fewer employees at a time.");
+  return unique;
+}
+
+function revalidateEmployeePages() {
+  revalidatePath("/employees");
+  revalidatePath("/departments");
+  revalidatePath("/", "layout"); // overview stats + notifications
+}
+
+// Move everyone selected into one department (null = unassigned).
+export async function bulkSetDepartment(ids: string[], departmentId: string | null): Promise<number> {
+  await assertCanManageEmployees();
+  const list = cleanIds(ids);
+  if (departmentId) {
+    const exists = await prisma.department.findUnique({ where: { id: departmentId }, select: { id: true } });
+    if (!exists) throw new Error("That department no longer exists.");
+  }
+  const { count } = await prisma.employee.updateMany({ where: { id: { in: list } }, data: { departmentId } });
+  revalidateEmployeePages();
+  return count;
+}
+
+// Set the same status (Active / On Leave / Remote) for everyone selected.
+export async function bulkSetStatus(ids: string[], status: EmployeeStatus): Promise<number> {
+  await assertCanManageEmployees();
+  const list = cleanIds(ids);
+  if (!["Active", "On Leave", "Remote"].includes(status)) throw new Error("Invalid status.");
+  const { count } = await prisma.employee.updateMany({ where: { id: { in: list } }, data: { status } });
+  revalidateEmployeePages();
+  return count;
+}
+
+// Delete everyone selected (their leave, attendance, reviews and payslips go
+// with them via the database's cascade rules; linked logins are kept but unlinked).
+export async function bulkDeleteEmployees(ids: string[]): Promise<number> {
+  await assertCanManageEmployees();
+  const list = cleanIds(ids);
+  const { count } = await prisma.employee.deleteMany({ where: { id: { in: list } } });
+  revalidateEmployeePages();
+  return count;
+}

@@ -30,7 +30,21 @@ export type ReviewRow = {
   strengths: string | null;
   goals: string | null;
   status: string;
+  updatedAt: string; // ISO — last edit or status change
 };
+
+// An employee as the Performance page needs them.
+export type PerfEmployee = { id: string; name: string; role: string; department: string | null };
+
+/*
+  Sort key for cycle names like "Q2 2026" or "H1 2026" so they order in time:
+  year first, then the part of the year (Q1/H1 early … Q4/H2 late).
+*/
+export function periodSortKey(period: string): number {
+  const year = Number(period.match(/d{4}/)?.[0] ?? 0);
+  const part = /Q1/i.test(period) ? 1 : /Q2|H1/i.test(period) ? 2 : /Q3/i.test(period) ? 3 : /Q4|H2/i.test(period) ? 4 : 0;
+  return year * 10 + part;
+}
 
 // Fields the form submits when creating/editing a review.
 export type ReviewInput = {

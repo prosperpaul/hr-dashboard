@@ -25,7 +25,10 @@ export default async function UsersPage() {
       orderBy: { createdAt: "desc" },
       include: { employee: { select: { name: true } } },
     }),
-    prisma.employee.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.employee.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, role: true, department: { select: { name: true } } },
+    }),
   ]);
 
   // Map to the safe shape (no password hashes leave the server).
@@ -41,9 +44,10 @@ export default async function UsersPage() {
 
   return (
     <UsersManager
-      initialUsers={users}
-      employees={employees}
+      users={users}
+      employees={employees.map((e) => ({ id: e.id, name: e.name, title: e.role, department: e.department?.name ?? null }))}
       currentUserId={session!.user.id}
+      now={new Date().toISOString()}
     />
   );
 }

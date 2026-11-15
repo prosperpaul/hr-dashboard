@@ -21,11 +21,17 @@ export default function PayRunModal({
   const [period, setPeriod] = useState(currentPeriod());
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!open) return;
-    setPeriod(currentPeriod());
-    setError("");
-  }, [open]);
+  // Reset the form each time the panel opens. This runs during render at the
+  // moment `open` flips to true (React's recommended way to respond to a prop
+  // change) instead of in an effect, which would render everything twice.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setPeriod(currentPeriod());
+      setError("");
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -46,20 +52,20 @@ export default function PayRunModal({
   }
 
   const inputClass =
-    "w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/40";
+    "w-full rounded-lg border border-border bg-surface px-3 py-2 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent";
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-md" onClick={onClose} />
 
-      <div className="relative w-full max-w-sm rounded-2xl border border-border bg-surface shadow-2xl">
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm rounded-xl border border-border-strong bg-surface-2 shadow-modal">
         <div className="flex items-center justify-between border-b border-border px-5 h-14">
-          <h2 className="text-base font-semibold text-ink">New pay run</h2>
+          <h2 className="text-headline-sm text-ink">New pay run</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint hover:bg-surface-2 hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
           >
             <X className="h-4 w-4" />
           </button>
@@ -67,7 +73,7 @@ export default function PayRunModal({
 
         <form onSubmit={handleSubmit} className="p-5">
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink">Pay period</span>
+            <span className="mb-1.5 block text-label-sm uppercase tracking-wider text-ink-faint">Pay period</span>
             <input
               className={inputClass}
               value={period}
@@ -76,12 +82,12 @@ export default function PayRunModal({
               autoFocus
             />
           </label>
-          <p className="mt-1.5 text-xs text-ink-faint">
+          <p className="mt-1.5 text-body-sm text-ink-faint">
             Generates a payslip for every employee with a salary set.
           </p>
 
           {error && (
-            <p className="mt-3 rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-sm text-critical">
+            <p role="alert" className="mt-3 rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
               {error}
             </p>
           )}
@@ -90,13 +96,13 @@ export default function PayRunModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-border px-4 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              className="h-9 rounded-lg border border-border bg-surface px-4 text-label-md text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+              className="h-9 rounded-lg bg-accent px-4 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed"
             >
               Generate
             </button>

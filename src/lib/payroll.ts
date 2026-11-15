@@ -20,13 +20,47 @@ export function computePayslip(annualSalary: number): {
   return { gross, deductions, net: gross - deductions };
 }
 
-// "$4,167" — currency formatting (USD, no cents).
+/*
+  Money is stored as whole NAIRA (₦). These formatters are created once and
+  reused (building an Intl.NumberFormat is relatively slow).
+  `narrowSymbol` forces "₦" everywhere — without it some browsers print "NGN".
+*/
+const nairaFormat = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  currencyDisplay: "narrowSymbol",
+  maximumFractionDigits: 0,
+});
+const nairaCompact = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  currencyDisplay: "narrowSymbol",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+// "₦1,250,000"
 export function formatMoney(n: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(n);
+  return nairaFormat.format(n);
+}
+
+// "₦1.3M" — short form for big headline numbers.
+export function formatMoneyCompact(n: number): string {
+  return nairaCompact.format(n);
+}
+
+// "2026-07" -> "July 2026"
+export function periodLabel(period: string): string {
+  const [y, m] = period.split("-").map(Number);
+  if (!y || !m) return period; // not in YYYY-MM form — show as typed
+  return new Date(y, m - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric" });
+}
+
+// Payday = last day of the period's month. "2026-07" -> Date(2026-07-31)
+export function payDateOf(period: string): Date | null {
+  const [y, m] = period.split("-").map(Number);
+  if (!y || !m) return null;
+  return new Date(y, m, 0);
 }
 
 // An employee's salary row (Admin/HR salaries view).

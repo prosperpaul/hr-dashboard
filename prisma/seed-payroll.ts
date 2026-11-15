@@ -4,24 +4,24 @@ import { computePayslip } from "../src/lib/payroll";
 
 const prisma = new PrismaClient();
 
-// email -> annual gross salary
+// email -> annual gross salary in NAIRA (₦)
 const salaries: Record<string, number> = {
-  "amara.okafor@company.com": 120000,
-  "daniel.reyes@company.com": 95000,
-  "priya.nair@company.com": 105000,
-  "marcus.lee@company.com": 68000,
-  "sofia.rossi@company.com": 88000,
-  "james.carter@company.com": 165000,
-  "lin.wei@company.com": 122000,
-  "fatima.hassan@company.com": 82000,
-  "oliver.grant@company.com": 140000,
-  "chloe.bennett@company.com": 110000,
-  "diego.martinez@company.com": 66000,
-  "hana.kim@company.com": 98000,
-  "noah.williams@company.com": 128000,
-  "aisha.bello@company.com": 72000,
-  "ethan.brooks@company.com": 90000,
-  "mia.zhang@company.com": 78000,
+  "amara.okafor@company.com": 12_000_000,
+  "daniel.reyes@company.com": 9_500_000,
+  "priya.nair@company.com": 10_500_000,
+  "marcus.lee@company.com": 6_800_000,
+  "sofia.rossi@company.com": 8_800_000,
+  "james.carter@company.com": 16_500_000,
+  "lin.wei@company.com": 12_200_000,
+  "fatima.hassan@company.com": 8_200_000,
+  "oliver.grant@company.com": 14_000_000,
+  "chloe.bennett@company.com": 11_000_000,
+  "diego.martinez@company.com": 6_600_000,
+  "hana.kim@company.com": 9_800_000,
+  "noah.williams@company.com": 12_800_000,
+  "aisha.bello@company.com": 7_200_000,
+  "ethan.brooks@company.com": 9_000_000,
+  "mia.zhang@company.com": 7_800_000,
 };
 
 async function main() {

@@ -33,6 +33,7 @@ export default async function RecruitmentPage() {
     type: j.type,
     status: j.status,
     description: j.description,
+    createdAt: j.createdAt.toISOString(),
     candidates: j.candidates.map((c) => ({
       id: c.id,
       jobId: c.jobId,
@@ -40,8 +41,11 @@ export default async function RecruitmentPage() {
       email: c.email,
       stage: c.stage,
       notes: c.notes,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
     })),
   }));
 
-  return <RecruitmentManager jobs={jobs} departments={departments} />;
+  // "now" from the server so relative times ("2h ago") match on server & browser.
+  return <RecruitmentManager jobs={jobs} departments={departments} now={new Date().toISOString()} />;
 }

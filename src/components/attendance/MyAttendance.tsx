@@ -86,28 +86,33 @@ export default function MyAttendance({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">My attendance</h1>
-        <p className="mt-1 text-sm text-ink-muted">{formatDay(today)}</p>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-ink-faint">
+          <span>Operations</span>
+          <span>/</span>
+          <span className="normal-case tracking-normal text-ink-muted">Attendance</span>
+        </div>
+        <h1 className="text-headline-lg text-ink md:text-headline-xl">My attendance</h1>
+        <p className="text-body-md text-ink-muted">{formatDay(today)} · times shown in Lagos time (WAT)</p>
       </div>
 
       {/* Clock in/out card */}
-      <div className="rounded-2xl border border-border bg-surface p-6">
+      <div className="rounded-xl border border-border bg-surface p-6">
         {!hasClockIn && (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-surface-2">
+              <div className="grid h-11 w-11 place-items-center rounded-lg border border-border bg-surface-2">
                 <Clock className="h-5 w-5 text-ink-faint" />
               </div>
               <div>
-                <p className="font-medium text-ink">You haven&apos;t clocked in yet</p>
-                <p className="text-sm text-ink-muted">Clock in to start your day.</p>
+                <p className="text-headline-sm text-ink">You haven&apos;t clocked in yet</p>
+                <p className="text-body-md text-ink-muted">Clock in to start your day. After 9:15 AM counts as late.</p>
               </div>
             </div>
             <button
               onClick={doClockIn}
               disabled={isPending}
-              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_24px_-6px_var(--color-accent)] transition-colors hover:bg-accent-hover disabled:opacity-60"
+              className="flex h-11 items-center gap-2 rounded-lg bg-accent px-5 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2),0_0_24px_-6px_var(--color-accent)] transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
             >
               <LogIn className="h-4 w-4" />
               Clock in
@@ -122,10 +127,10 @@ export default function MyAttendance({
                 <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-good" />
               </div>
               <div>
-                <p className="font-medium text-ink">
+                <p className="text-headline-sm text-ink">
                   Clocked in at {formatTime(todayRec!.clockIn)}
                 </p>
-                <p className="text-sm text-ink-muted">
+                <p className="text-body-md text-ink-muted">
                   You&apos;re currently on the clock.
                   {todayRec!.status === "Late" && (
                     <span className="ml-1 text-warning">Marked late.</span>
@@ -136,7 +141,7 @@ export default function MyAttendance({
             <button
               onClick={doClockOut}
               disabled={isPending}
-              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
+              className="flex h-11 items-center gap-2 rounded-lg border border-border bg-surface-2 px-5 text-label-md text-ink transition-colors hover:border-border-strong disabled:opacity-60"
             >
               <LogOut className="h-4 w-4" />
               Clock out
@@ -150,8 +155,8 @@ export default function MyAttendance({
               <CheckCircle2 className="h-5 w-5 text-good" />
             </div>
             <div>
-              <p className="font-medium text-ink">You&apos;re done for today</p>
-              <p className="text-sm text-ink-muted">
+              <p className="text-headline-sm text-ink">You&apos;re done for today</p>
+              <p className="tnum text-body-md text-ink-muted">
                 In {formatTime(todayRec!.clockIn)} · Out {formatTime(todayRec!.clockOut)} ·{" "}
                 {formatDuration(minutesWorked(todayRec!.clockIn, todayRec!.clockOut))} worked
               </p>
@@ -161,14 +166,14 @@ export default function MyAttendance({
       </div>
 
       {/* History */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-        <div className="border-b border-border px-5 py-3">
-          <h2 className="text-sm font-medium text-ink">Recent days</h2>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="text-headline-md text-ink">Recent days</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-[13px] leading-[18px]">
             <thead>
-              <tr className="border-b border-border text-xs uppercase tracking-wider text-ink-faint">
+              <tr className="border-b border-border text-label-sm uppercase tracking-[0.05em] text-ink-faint">
                 <th className="px-4 py-3 font-medium sm:px-5">Date</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell sm:px-5">Clock in</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell sm:px-5">Clock out</th>
@@ -181,7 +186,7 @@ export default function MyAttendance({
               {list.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-b border-border last:border-0 transition-colors hover:bg-surface-2"
+                  className="h-12 border-b border-border last:border-0 transition-colors hover:bg-surface-2"
                 >
                   <td className="px-4 py-3 font-medium text-ink sm:px-5">{formatDay(r.date)}</td>
                   <td className="hidden px-4 py-3 text-ink-muted sm:table-cell sm:px-5">{formatTime(r.clockIn)}</td>
@@ -209,7 +214,7 @@ export default function MyAttendance({
 
         {list.length === 0 && (
           <div className="grid place-items-center py-12 text-center">
-            <p className="text-sm text-ink-muted">No attendance history yet.</p>
+            <p className="text-body-md text-ink-muted">No attendance history yet.</p>
           </div>
         )}
       </div>
