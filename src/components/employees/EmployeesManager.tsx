@@ -1,24 +1,24 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Search,
   Plus,
   Pencil,
   Trash2,
-  Users,
   Download,
   LayoutList,
   LayoutGrid,
   MoreHorizontal,
-  Building2,
-  Activity,
   X,
   Mail,
-  CalendarDays,
+  ChevronDown,
+  UserX,
+  UserRound,
 } from "lucide-react";
-import { employeeStatuses, initialsOf, type Employee, type EmployeeStatus } from "@/lib/sample-data";
+import { employeeStatuses, type Employee, type EmployeeStatus } from "@/lib/sample-data";
 import {
   createEmployee,
   updateEmployee,
@@ -28,9 +28,11 @@ import {
   bulkDeleteEmployees,
   type EmployeeInput,
 } from "@/lib/employee-actions";
-import StatCard, { type DashStat } from "@/components/dashboard/StatCard";
 import StatusBadge from "./StatusBadge";
+import EmployeeAvatar from "./EmployeeAvatar";
 import EmployeeFormModal from "./EmployeeFormModal";
+import { deptTint } from "@/lib/dept-tint";
+import { formatDate, formatMonthYear, parseDay, tenure } from "./employee-format";
 
 // A department option for the filter + form dropdown.
 export type DeptOption = { id: string; name: string };
@@ -43,26 +45,6 @@ const SORTS = {
   dept: { label: "Department", fn: (a: Employee, b: Employee) => a.department.localeCompare(b.department) || a.name.localeCompare(b.name) },
 } as const;
 type SortKey = keyof typeof SORTS;
-
-// "YYYY-MM-DD" helpers (pure dates, no time zone involved).
-const parseDay = (s: string) => {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, (m ?? 1) - 1, d ?? 1);
-};
-const formatDate = (iso: string) =>
-  isNaN(parseDay(iso).getTime()) ? iso : parseDay(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-// How long someone has worked here: "2y 3m", "5m", "New".
-function tenure(start: string, today: string): string {
-  const a = parseDay(start);
-  const b = parseDay(today);
-  let months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
-  if (b.getDate() < a.getDate()) months--;
-  if (months < 1) return "New";
-  const y = Math.floor(months / 12);
-  const m = months % 12;
-  return y ? `${y}y${m ? ` ${m}m` : ""}` : `${m}m`;
-}
 
 export default function EmployeesManager({
   employees,
@@ -84,7 +66,7 @@ export default function EmployeesManager({
   const [dept, setDept] = useState("All");
   const [status, setStatus] = useState("All");
   const [sort, setSort] = useState<SortKey>("name");
-  const [view, setView] = useState<"table" | "grid">("table");
+  const [view, setView] = useState<"grid" | "table">("grid"); // "People" cards first, like the mockup
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(12);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -93,53 +75,26 @@ export default function EmployeesManager({
   const [editing, setEditing] = useState<Employee | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // ── Headline numbers ──────────────────────────────────────────────
+  // ── Headline numbers (all counted from the real list) ─────────────
   const count = (s: EmployeeStatus) => employees.filter((e) => e.status === s).length;
-  const monthPrefix = today.slice(0, 7);
   const t = parseDay(today);
-  const lastMonthPrefix = `${new Date(t.getFullYear(), t.getMonth() - 1, 1).getFullYear()}-${String(new Date(t.getFullYear(), t.getMonth() - 1, 1).getMonth() + 1).padStart(2, "0")}`;
-  const quarterAgo = new Date(t.getFullYear(), t.getMonth() - 3, t.getDate());
-  const newThisQuarter = employees.filter((e) => parseDay(e.startedAt) >= quarterAgo).length;
+  const monthPrefix = today.slice(0, 7);
+  const lastMonth = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+  const lastMonthPrefix = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
   const newThisMonth = employees.filter((e) => e.startedAt.startsWith(monthPrefix)).length;
   const newLastMonth = employees.filter((e) => e.startedAt.startsWith(lastMonthPrefix)).length;
   const deptCount = new Set(employees.map((e) => e.departmentId).filter(Boolean)).size;
-  const pct = (n: number) => (employees.length ? Math.round((n / employees.length) * 1000) / 10 : 0);
+  const unassigned = employees.filter((e) => !e.departmentId).length;
 
-  const stats: DashStat[] = [
+  const strip = [
+    { label: "Active", value: count("Active"), dot: "bg-good" },
+    { label: "On leave", value: count("On Leave"), dot: "bg-warning" },
+    { label: "Remote", value: count("Remote"), dot: "bg-sky-300" },
     {
-      key: "total",
-      label: "Total employees",
-      value: String(employees.length),
-      badge: newThisQuarter > 0 ? { text: `+${newThisQuarter} this quarter`, trend: "up" } : undefined,
-      footer: { label: "Unassigned to a department", value: String(employees.filter((e) => !e.departmentId).length) },
-    },
-    {
-      key: "active",
-      label: "Active",
-      value: String(count("Active")),
-      badge: { text: `${pct(count("Active"))}%`, dot: true },
-      bar: [
-        { value: count("Active"), className: "bg-accent" },
-        { value: count("Remote"), className: "bg-sky-400" },
-        { value: count("On Leave"), className: "bg-warning" },
-      ],
-      footer: { label: "Of the whole team", value: `${pct(count("Active"))}% active` },
-    },
-    {
-      key: "away",
-      label: "On leave & remote",
-      value: String(count("On Leave") + count("Remote")),
-      footer: { label: "On leave · Remote", value: `${count("On Leave")} · ${count("Remote")}` },
-    },
-    {
-      key: "new",
       label: "New this month",
-      value: String(newThisMonth),
-      badge:
-        newThisMonth !== newLastMonth
-          ? { text: `${newThisMonth > newLastMonth ? "+" : "−"}${Math.abs(newThisMonth - newLastMonth)} vs last mo`, tone: newThisMonth > newLastMonth ? "accent" : "neutral" }
-          : undefined,
-      footer: { label: "Last month", value: String(newLastMonth) },
+      value: newThisMonth,
+      dot: "bg-accent",
+      note: newThisMonth !== newLastMonth ? `${newThisMonth > newLastMonth ? "+" : "−"}${Math.abs(newThisMonth - newLastMonth)} vs last month` : `Same as last month`,
     },
   ];
 
@@ -154,6 +109,13 @@ export default function EmployeesManager({
   const current = Math.min(page, pages - 1);
   const visible = filtered.slice(current * pageSize, current * pageSize + pageSize);
   const resetPage = () => setPage(0);
+  const hasFilters = q !== "" || dept !== "All" || status !== "All";
+  function resetFilters() {
+    setQuery("");
+    setDept("All");
+    setStatus("All");
+    resetPage();
+  }
 
   // ── Selection ─────────────────────────────────────────────────────
   // Only count selections that are still in the list (e.g. after a delete).
@@ -220,6 +182,7 @@ export default function EmployeesManager({
       run(() => bulkDeleteEmployees(selectedIds), () => setSelected(new Set()));
   }
 
+  // Build a CSV file in the browser and download it.
   function exportCsv(rows: Employee[], name: string) {
     const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
     const data = [
@@ -234,9 +197,8 @@ export default function EmployeesManager({
     URL.revokeObjectURL(url);
   }
 
-  const control =
-    "h-9 rounded-lg border border-border bg-surface-2 px-2.5 text-label-md text-ink outline-none transition-colors hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent";
-  const checkbox = "h-4 w-4 cursor-pointer rounded border-border-strong accent-(--color-accent)";
+  const checkbox = "h-4 w-4 cursor-pointer rounded border-border-strong accent-(--color-ink)";
+  const bulkOpen = canManage && selectedIds.length > 0;
 
   // "⋯" menu shared by table rows and grid cards.
   function rowMenu(e: Employee) {
@@ -247,22 +209,25 @@ export default function EmployeesManager({
           onClick={() => setMenuFor(menuFor === e.id ? null : e.id)}
           aria-label={`Options for ${e.name}`}
           aria-expanded={menuFor === e.id}
-          className="grid h-7 w-7 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
+          className="grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
         {menuFor === e.id && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuFor(null)} />
-            <div className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-border-strong bg-surface-2 p-1 text-left shadow-popover">
-              <button onClick={() => openEdit(e)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-label-md text-ink-muted transition-colors hover:bg-surface hover:text-ink">
+            <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-border bg-surface p-1 text-left shadow-popover">
+              <Link href={`/employees/${e.id}`} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label-md text-ink-muted transition-colors hover:bg-bg hover:text-ink">
+                <UserRound className="h-3.5 w-3.5" /> View profile
+              </Link>
+              <button onClick={() => openEdit(e)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label-md text-ink-muted transition-colors hover:bg-bg hover:text-ink">
                 <Pencil className="h-3.5 w-3.5" /> Edit details
               </button>
-              <a href={`mailto:${e.email}`} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-label-md text-ink-muted transition-colors hover:bg-surface hover:text-ink">
+              <a href={`mailto:${e.email}`} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label-md text-ink-muted transition-colors hover:bg-bg hover:text-ink">
                 <Mail className="h-3.5 w-3.5" /> Send email
               </a>
               <div className="my-1 border-t border-border" />
-              <button onClick={() => handleDelete(e)} className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-label-md text-critical transition-colors hover:bg-critical/10">
+              <button onClick={() => handleDelete(e)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-label-md text-critical transition-colors hover:bg-critical/10">
                 <Trash2 className="h-3.5 w-3.5" /> Remove employee
               </button>
             </div>
@@ -272,37 +237,42 @@ export default function EmployeesManager({
     );
   }
 
+  // Small "You" tag for your own record.
+  const youTag = (e: Employee) =>
+    e.id === myEmployeeId && <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-on-accent">You</span>;
+
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-ink-faint">
-            <span>Main</span>
-            <span>/</span>
-            <span className="normal-case tracking-normal text-accent-hover">Employees · Directory</span>
+    <div className={`space-y-6 ${bulkOpen ? "pb-28" : ""}`}>
+      {/* ── Editorial header ── */}
+      <section className="flex flex-col justify-between gap-5 border-b border-border pb-6 md:flex-row md:items-end">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+            <span>Directory index</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-ink/30" />
+            <span>{isPending ? "Saving…" : `${filtered.length} shown`}</span>
           </div>
-          <div className="flex flex-wrap items-baseline gap-3">
-            <h1 className="text-headline-lg text-ink md:text-headline-xl">Employees</h1>
-            <span className="text-body-md text-ink-muted">
-              {isPending ? "Saving…" : `${employees.length} people across ${deptCount} ${deptCount === 1 ? "department" : "departments"}`}
-            </span>
-          </div>
+          <h1 className="text-headline-lg text-ink md:text-headline-xl">
+            {employees.length} {employees.length === 1 ? "person" : "people"} across {deptCount} {deptCount === 1 ? "department" : "departments"}
+          </h1>
+          <p className="max-w-2xl text-body-md text-ink-muted">
+            The full team directory: roles, departments, status and start dates.
+            {unassigned > 0 && ` ${unassigned} ${unassigned === 1 ? "person isn't" : "people aren't"} assigned to a department yet.`}
+          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             onClick={() => exportCsv(filtered, "employees")}
             disabled={filtered.length === 0}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 text-label-md text-ink transition-colors hover:border-border-strong hover:bg-white/[0.03] disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
-            Export
+            Export directory
           </button>
           {canManage && (
             <button
               onClick={openAdd}
               disabled={isPending}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-5 text-label-md text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
               Add employee
@@ -311,64 +281,77 @@ export default function EmployeesManager({
         </div>
       </section>
 
-      {/* ── KPI cards ── */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s) => (
-          <StatCard key={s.key} stat={s} />
+      {/* ── Status strip: real head-counts, hairline separated ── */}
+      <section className="grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-surface lg:grid-cols-4">
+        {strip.map((s, i) => (
+          <div key={s.label} className={`p-4 ${i % 2 ? "border-l border-border" : ""} ${i >= 2 ? "border-t border-border lg:border-t-0" : ""} ${i === 2 ? "lg:border-l" : ""}`}>
+            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+              <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+              {s.label}
+            </p>
+            <p className="tnum mt-1 text-metric-md text-ink">{s.value}</p>
+            {s.note && <p className="text-body-sm text-ink-faint">{s.note}</p>}
+          </div>
         ))}
       </section>
 
-      {/* ── Toolbar ── */}
-      <section className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-2 lg:flex-row lg:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              resetPage();
-            }}
-            placeholder="Search by name, email or role…"
-            className="h-9 w-full rounded-lg border border-border bg-surface-2 pl-8 pr-3 text-body-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select aria-label="Department" value={dept} onChange={(e) => { setDept(e.target.value); resetPage(); }} className={control}>
-            <option value="All">All departments ({departments.length})</option>
+      {/* ── Filter & view bar ── */}
+      <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-1 flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                resetPage();
+              }}
+              placeholder="Search by name, role or email…"
+              aria-label="Search employees"
+              className="h-10 w-full rounded-lg border border-border bg-surface pl-9 pr-4 text-body-sm text-ink placeholder:text-ink-muted outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink"
+            />
+          </div>
+          <FilterSelect label="Department" value={dept} onChange={(v) => { setDept(v); resetPage(); }}>
+            <option value="All">All departments</option>
             {departments.map((d) => (
               <option key={d.id} value={d.name}>
                 {d.name}
               </option>
             ))}
             <option value="Unassigned">Unassigned</option>
-          </select>
-          <select aria-label="Status" value={status} onChange={(e) => { setStatus(e.target.value); resetPage(); }} className={control}>
-            <option value="All">Status: All</option>
+          </FilterSelect>
+          <FilterSelect label="Status" value={status} onChange={(v) => { setStatus(v); resetPage(); }}>
+            <option value="All">All</option>
             {employeeStatuses.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
-          <select aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={control}>
+          </FilterSelect>
+          <FilterSelect label="Sort" value={sort} onChange={(v) => setSort(v as SortKey)}>
             {Object.entries(SORTS).map(([k, s]) => (
               <option key={k} value={k}>
-                Sort: {s.label}
+                {s.label}
               </option>
             ))}
-          </select>
-          <div className="flex rounded-lg border border-border bg-bg p-0.5" role="group" aria-label="View">
-            {(["table", "grid"] as const).map((v) => {
-              const Icon = v === "table" ? LayoutList : LayoutGrid;
+          </FilterSelect>
+        </div>
+        <div className="flex shrink-0 items-center justify-between gap-4">
+          <span className="tnum text-body-sm text-ink-muted">
+            Showing {visible.length} of {filtered.length}
+          </span>
+          <div className="inline-flex rounded-full border border-border bg-surface p-0.5" role="group" aria-label="View">
+            {(["grid", "table"] as const).map((v) => {
+              const Icon = v === "grid" ? LayoutGrid : LayoutList;
               return (
                 <button
                   key={v}
                   onClick={() => setView(v)}
                   aria-pressed={view === v}
-                  aria-label={`${v} view`}
-                  className={`grid h-8 w-8 place-items-center rounded-md transition-colors ${view === v ? "bg-surface-2 text-accent-hover" : "text-ink-faint hover:text-ink"}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-label-md transition-colors ${view === v ? "bg-navy text-on-navy" : "text-ink-muted hover:text-ink"}`}
                 >
                   <Icon className="h-4 w-4" />
+                  {v === "grid" ? "People" : "Table"}
                 </button>
               );
             })}
@@ -376,171 +359,124 @@ export default function EmployeesManager({
         </div>
       </section>
 
-      {/* ── Bulk action bar (appears when people are selected) ── */}
-      {canManage && selectedIds.length > 0 && (
-        <section className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="tnum text-label-md text-ink">
-              {selectedIds.length} {selectedIds.length === 1 ? "employee" : "employees"} selected
-            </span>
-            <button onClick={() => setSelected(new Set())} className="inline-flex items-center gap-1 text-label-sm text-ink-muted underline-offset-2 hover:text-ink hover:underline">
-              <X className="h-3 w-3" /> Deselect all
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => exportCsv(employees.filter((e) => selected.has(e.id)), "employees-selected")}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface px-2.5 text-label-sm text-ink transition-colors hover:border-border-strong"
-            >
-              <Download className="h-3.5 w-3.5" /> Export selected
-            </button>
-            <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface pl-2.5 text-label-sm text-ink">
-              <Building2 className="h-3.5 w-3.5 text-ink-faint" />
-              <select value="" onChange={(e) => bulkDept(e.target.value)} disabled={isPending} className="h-full rounded-r-lg bg-transparent pr-2 outline-none">
-                <option value="">Change department…</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-                <option value="__none">Unassigned</option>
-              </select>
-            </label>
-            <label className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface pl-2.5 text-label-sm text-ink">
-              <Activity className="h-3.5 w-3.5 text-ink-faint" />
-              <select value="" onChange={(e) => bulkStatus(e.target.value)} disabled={isPending} className="h-full rounded-r-lg bg-transparent pr-2 outline-none">
-                <option value="">Change status…</option>
-                {employeeStatuses.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              onClick={bulkDelete}
-              disabled={isPending}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-critical/40 bg-critical/10 px-2.5 text-label-sm text-critical transition-colors hover:bg-critical/20 disabled:opacity-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Delete
-            </button>
-          </div>
-        </section>
-      )}
-
-      {/* ── Table view ── */}
       {view === "table" ? (
+        /* ── Table view ── */
         <section className="overflow-hidden rounded-xl border border-border bg-surface">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13px] leading-[18px]">
+            <table className="w-full text-left text-body-sm">
               <thead>
-                <tr className="border-b border-border text-label-sm uppercase tracking-[0.05em] text-ink-faint">
+                <tr className="border-b border-border bg-bg text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
                   {canManage && (
-                    <th className="w-10 py-3 pl-5">
+                    <th className="w-12 px-4 py-3">
                       <input type="checkbox" aria-label="Select all on this page" checked={allVisibleSelected} onChange={toggleVisible} className={checkbox} />
                     </th>
                   )}
-                  <th className="px-4 py-3 font-medium">Employee</th>
-                  <th className="hidden px-4 py-3 font-medium md:table-cell">Role / title</th>
-                  <th className="hidden px-4 py-3 font-medium lg:table-cell">Department</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="hidden px-4 py-3 font-medium sm:table-cell">Start date</th>
-                  <th className="hidden px-4 py-3 text-right font-medium xl:table-cell">Leave / yr</th>
-                  <th className="w-12 px-4 py-3" />
+                  <th className="px-4 py-3">Name &amp; contact</th>
+                  <th className="hidden px-4 py-3 md:table-cell">Role</th>
+                  <th className="hidden px-4 py-3 lg:table-cell">Department</th>
+                  <th className="hidden px-4 py-3 sm:table-cell">Start date</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="hidden px-4 py-3 text-right xl:table-cell">Leave / yr</th>
+                  <th className="w-12 px-4 py-3 text-right">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {visible.map((e) => {
                   const isSel = selected.has(e.id);
                   return (
-                    <tr key={e.id} className={`h-14 border-b border-border last:border-0 ${isSel ? "bg-accent-soft" : "hover:bg-surface-2"}`}>
+                    <tr key={e.id} className={`border-b border-border last:border-0 ${isSel ? "bg-accent-soft" : "hover:bg-bg"}`}>
                       {canManage && (
-                        <td className="py-2.5 pl-5">
+                        <td className="px-4 py-3">
                           <input type="checkbox" aria-label={`Select ${e.name}`} checked={isSel} onChange={() => toggle(e.id)} className={checkbox} />
                         </td>
                       )}
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-[10px] font-semibold text-accent-hover">
-                            {initialsOf(e.name)}
-                          </div>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <EmployeeAvatar name={e.name} department={e.departmentId ? e.department : null} size="sm" />
                           <div className="min-w-0">
-                            <p className="flex items-center gap-1.5 truncate font-medium text-ink">
-                              {e.name}
-                              {e.id === myEmployeeId && <span className="rounded border border-accent/30 bg-accent-soft px-1 text-[10px] text-accent-hover">You</span>}
+                            <p className="flex items-center gap-1.5 truncate">
+                              <Link href={`/employees/${e.id}`} className="font-semibold text-ink underline-offset-2 hover:underline">
+                                {e.name}
+                              </Link>
+                              {youTag(e)}
                             </p>
-                            <p className="truncate text-body-sm text-ink-faint">{e.email}</p>
+                            <p className="truncate text-ink-muted">{e.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="hidden px-4 py-2.5 text-ink-muted md:table-cell">{e.role}</td>
-                      <td className="hidden px-4 py-2.5 lg:table-cell">
-                        {e.departmentId ? (
-                          <span className="rounded-md border border-border bg-surface-2 px-2 py-0.5 text-label-sm text-ink-muted">{e.department}</span>
-                        ) : (
-                          <span className="text-body-sm text-ink-faint">Unassigned</span>
-                        )}
+                      <td className="hidden px-4 py-3 text-body-md text-ink md:table-cell">{e.role}</td>
+                      <td className="hidden px-4 py-3 lg:table-cell">
+                        <DeptLabel name={e.departmentId ? e.department : null} />
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="hidden px-4 py-3 sm:table-cell">
+                        <p className="tnum text-ink-muted">{formatDate(e.startedAt)}</p>
+                        <p className="text-ink-faint">{tenure(e.startedAt, today)}</p>
+                      </td>
+                      <td className="px-4 py-3">
                         <StatusBadge status={e.status} />
                       </td>
-                      <td className="hidden px-4 py-2.5 sm:table-cell">
-                        <p className="tnum text-ink">{formatDate(e.startedAt)}</p>
-                        <p className="text-body-sm text-ink-faint">{tenure(e.startedAt, today)}</p>
-                      </td>
-                      <td className="tnum hidden px-4 py-2.5 text-right text-ink-muted xl:table-cell">{e.leaveAllowance} days</td>
-                      <td className="px-4 py-2.5 text-right">{rowMenu(e)}</td>
+                      <td className="tnum hidden px-4 py-3 text-right text-ink-muted xl:table-cell">{e.leaveAllowance} days</td>
+                      <td className="px-4 py-3 text-right">{rowMenu(e)}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            {visible.length === 0 && <EmptyState hasEmployees={employees.length > 0} canManage={canManage} />}
+            {visible.length === 0 && <EmptyState hasEmployees={employees.length > 0} hasFilters={hasFilters} canManage={canManage} total={employees.length} onReset={resetFilters} />}
           </div>
           <Pager current={current} pages={pages} pageSize={pageSize} total={filtered.length} shown={visible.length} onPage={setPage} onSize={(n) => { setPageSize(n); resetPage(); }} />
         </section>
       ) : (
-        /* ── Grid view ── */
+        /* ── People (card grid) view ── */
         <section className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {canManage && visible.length > 0 && (
+            <label className="inline-flex cursor-pointer items-center gap-2 text-body-sm text-ink-muted">
+              <input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} className={checkbox} />
+              Select all on this page
+            </label>
+          )}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {visible.map((e) => {
               const isSel = selected.has(e.id);
               return (
                 <article
                   key={e.id}
-                  className={`relative rounded-xl border bg-surface p-4 transition-colors duration-150 ${isSel ? "border-accent/50 bg-accent-soft" : "border-border hover:border-border-strong"}`}
+                  className={`flex flex-col rounded-xl border bg-surface transition-colors duration-150 ${isSel ? "border-ink" : "border-border hover:border-ink/40"}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    {canManage ? (
-                      <input type="checkbox" aria-label={`Select ${e.name}`} checked={isSel} onChange={() => toggle(e.id)} className={checkbox} />
-                    ) : (
-                      <span />
-                    )}
-                    {rowMenu(e)}
-                  </div>
-                  <div className="mt-1 flex flex-col items-center text-center">
-                    <div className="grid h-14 w-14 place-items-center rounded-full border border-accent/30 bg-accent-soft text-headline-sm text-accent-hover">{initialsOf(e.name)}</div>
-                    <p className="mt-3 flex items-center gap-1.5 text-headline-sm text-ink">
-                      {e.name}
-                      {e.id === myEmployeeId && <span className="rounded border border-accent/30 bg-accent-soft px-1 text-[10px] text-accent-hover">You</span>}
-                    </p>
-                    <p className="text-body-sm text-ink-muted">{e.role}</p>
-                    <div className="mt-3 flex flex-wrap justify-center gap-1.5">
-                      <span className="rounded-md border border-border bg-surface-2 px-2 py-0.5 text-label-sm text-ink-muted">{e.department}</span>
-                      <StatusBadge status={e.status} />
+                  {/* Portrait area: big initials avatar on a quiet band (no photos stored) */}
+                  <div className="relative grid h-36 place-items-center rounded-t-xl bg-bg">
+                    <EmployeeAvatar name={e.name} department={e.departmentId ? e.department : null} size="lg" />
+                    <div className="absolute left-3 top-3">
+                      {canManage && (
+                        <input type="checkbox" aria-label={`Select ${e.name}`} checked={isSel} onChange={() => toggle(e.id)} className={checkbox} />
+                      )}
                     </div>
+                    <div className="absolute right-2 top-2">{rowMenu(e)}</div>
                   </div>
-                  <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-body-sm">
-                    <p className="flex items-center gap-2 truncate text-ink-faint">
+                  <div className="flex-1 p-5">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+                      <span className={`h-2 w-2 rounded-full ring-1 ring-inset ring-ink/10 ${deptTint(e.departmentId ? e.department : null)}`} />
+                      <span className="truncate">{e.departmentId ? e.department : "Unassigned"}</span>
+                    </p>
+                    <h3 className="flex items-center gap-1.5 text-headline-sm text-ink">
+                      <Link href={`/employees/${e.id}`} className="truncate underline-offset-2 hover:underline">
+                        {e.name}
+                      </Link>
+                      {youTag(e)}
+                    </h3>
+                    <p className="mt-0.5 line-clamp-1 text-body-md text-ink-muted">{e.role}</p>
+                    <p className="mt-3 flex items-center gap-1.5 text-body-sm text-ink-muted">
                       <Mail className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">{e.email}</span>
                     </p>
-                    <p className="flex items-center gap-2 text-ink-faint">
-                      <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                      <span className="tnum">
-                        Joined {formatDate(e.startedAt)} · {tenure(e.startedAt, today)}
-                      </span>
-                    </p>
+                  </div>
+                  <div className="flex items-center justify-between rounded-b-xl border-t border-border bg-bg px-5 py-3">
+                    <StatusBadge status={e.status} />
+                    <span className="tnum text-[12px] text-ink-muted" title={tenure(e.startedAt, today)}>
+                      Joined {formatMonthYear(e.startedAt)}
+                    </span>
                   </div>
                 </article>
               );
@@ -548,7 +484,7 @@ export default function EmployeesManager({
           </div>
           {visible.length === 0 && (
             <div className="rounded-xl border border-border bg-surface">
-              <EmptyState hasEmployees={employees.length > 0} canManage={canManage} />
+              <EmptyState hasEmployees={employees.length > 0} hasFilters={hasFilters} canManage={canManage} total={employees.length} onReset={resetFilters} />
             </div>
           )}
           <div className="overflow-hidden rounded-xl border border-border bg-surface">
@@ -557,23 +493,125 @@ export default function EmployeesManager({
         </section>
       )}
 
+      {/* ── Floating bulk action bar (appears when people are selected) ── */}
+      {bulkOpen && (
+        <div className="fixed inset-x-4 bottom-4 z-30 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-navy-line bg-navy px-5 py-3 text-on-navy shadow-modal sm:inset-x-auto sm:left-1/2 sm:max-w-[calc(100vw-2rem)] sm:-translate-x-1/2 sm:rounded-full">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-accent" />
+            <span className="tnum whitespace-nowrap text-body-sm font-semibold">
+              {selectedIds.length} {selectedIds.length === 1 ? "employee" : "employees"} selected
+            </span>
+            <button onClick={() => setSelected(new Set())} aria-label="Deselect all" className="grid h-6 w-6 place-items-center rounded-full text-on-navy-muted transition-colors hover:bg-navy-2 hover:text-on-navy">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <span className="hidden h-4 w-px bg-navy-line sm:block" />
+          <div className="flex flex-wrap items-center gap-3 text-body-sm text-on-navy-muted">
+            <select
+              value=""
+              onChange={(e) => bulkDept(e.target.value)}
+              disabled={isPending}
+              aria-label="Change department"
+              className="h-8 cursor-pointer rounded-full border border-navy-line bg-navy-2 px-3 text-on-navy outline-none hover:border-on-navy-muted"
+            >
+              <option value="">Change department…</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+              <option value="__none">Unassigned</option>
+            </select>
+            <select
+              value=""
+              onChange={(e) => bulkStatus(e.target.value)}
+              disabled={isPending}
+              aria-label="Change status"
+              className="h-8 cursor-pointer rounded-full border border-navy-line bg-navy-2 px-3 text-on-navy outline-none hover:border-on-navy-muted"
+            >
+              <option value="">Change status…</option>
+              {employeeStatuses.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <button onClick={bulkDelete} disabled={isPending} className="inline-flex h-8 items-center gap-1.5 rounded-full px-2 text-on-navy-muted transition-colors hover:text-on-navy disabled:opacity-50">
+              <Trash2 className="h-3.5 w-3.5" /> Delete
+            </button>
+          </div>
+          <span className="hidden h-4 w-px bg-navy-line sm:block" />
+          <button
+            onClick={() => exportCsv(employees.filter((e) => selected.has(e.id)), "employees-selected")}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-4 text-label-md text-on-accent transition-colors hover:bg-accent-hover"
+          >
+            <Download className="h-3.5 w-3.5" /> Export ({selectedIds.length})
+          </button>
+        </div>
+      )}
+
       <EmployeeFormModal open={modalOpen} editing={editing} departments={departments} onClose={() => setModalOpen(false)} onSave={handleSave} />
     </div>
   );
 }
 
-function EmptyState({ hasEmployees, canManage }: { hasEmployees: boolean; canManage: boolean }) {
+// A hairline-underlined "Label: value ▾" dropdown, as in the mockup's filter bar.
+function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (v: string) => void; children: React.ReactNode }) {
   return (
-    <div className="grid place-items-center py-16 text-center">
-      <div>
-        <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">
-          <Users className="h-5 w-5 text-ink-faint" />
-        </div>
-        <p className="mt-3 text-headline-sm text-ink">{hasEmployees ? "No matching employees" : "No employees yet"}</p>
-        <p className="mt-1 text-body-md text-ink-muted">
-          {hasEmployees ? "Try a different search or filter." : canManage ? "Click “Add employee” to add your first person." : "Check back later."}
-        </p>
+    <label className="group inline-flex items-center gap-1.5 border-b border-ink/30 pb-1 transition-colors hover:border-ink">
+      <span className="text-body-sm text-ink-muted">{label}:</span>
+      <span className="relative inline-flex items-center">
+        <select value={value} onChange={(e) => onChange(e.target.value)} className="cursor-pointer appearance-none bg-transparent pr-5 text-label-md text-ink outline-none">
+          {children}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-0 h-4 w-4 text-ink-muted group-hover:text-ink" />
+      </span>
+    </label>
+  );
+}
+
+// "● Engineering" — a tint dot + the department name.
+function DeptLabel({ name }: { name: string | null }) {
+  if (!name) return <span className="text-ink-faint">Unassigned</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 font-medium text-ink">
+      <span className={`h-2 w-2 rounded-full ring-1 ring-inset ring-ink/10 ${deptTint(name)}`} />
+      {name}
+    </span>
+  );
+}
+
+function EmptyState({
+  hasEmployees,
+  hasFilters,
+  canManage,
+  total,
+  onReset,
+}: {
+  hasEmployees: boolean;
+  hasFilters: boolean;
+  canManage: boolean;
+  total: number;
+  onReset: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-md px-6 py-16 text-center">
+      <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full border border-border bg-bg text-ink">
+        <UserX className="h-5 w-5" />
       </div>
+      <p className="text-headline-sm text-ink">{hasEmployees ? "No teammates found" : "No employees yet"}</p>
+      <p className="mt-2 text-body-md text-ink-muted">
+        {hasEmployees
+          ? `Nobody matches these filters. Clear them to see all ${total} people.`
+          : canManage
+            ? "Click “Add employee” to add your first person."
+            : "Check back later."}
+      </p>
+      {hasEmployees && hasFilters && (
+        <button onClick={onReset} className="mt-5 text-label-md text-ink underline underline-offset-4 hover:opacity-80">
+          Reset all filters
+        </button>
+      )}
     </div>
   );
 }
@@ -596,14 +634,14 @@ function Pager({
   onSize: (n: number) => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-5 py-3 text-body-sm text-ink-faint first:border-t-0 sm:flex-row">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-5 py-3 text-body-sm text-ink-muted first:border-t-0 sm:flex-row">
+      <div className="flex flex-wrap items-center justify-center gap-3">
         <span className="tnum">
           Showing {total ? `${current * pageSize + 1}–${current * pageSize + shown}` : 0} of {total} employees
         </span>
         <label className="flex items-center gap-2">
-          Rows per page
-          <select value={pageSize} onChange={(e) => onSize(Number(e.target.value))} className="h-7 rounded-md border border-border bg-surface-2 px-1.5 text-label-sm text-ink outline-none">
+          Per page
+          <select value={pageSize} onChange={(e) => onSize(Number(e.target.value))} className="h-8 rounded-full border border-border bg-surface px-2 text-label-sm text-ink outline-none">
             {PAGE_SIZES.map((n) => (
               <option key={n} value={n}>
                 {n}
@@ -613,13 +651,13 @@ function Pager({
         </label>
       </div>
       <div className="flex items-center gap-2">
-        <button disabled={current === 0} onClick={() => onPage(current - 1)} className="rounded-md border border-border px-2.5 py-1 text-label-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink disabled:opacity-40">
+        <button disabled={current === 0} onClick={() => onPage(current - 1)} className="h-8 rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-40">
           Previous
         </button>
-        <span className="tnum text-label-sm text-ink">
-          Page {current + 1} of {pages}
+        <span className="tnum px-1 text-label-sm text-ink">
+          {current + 1} / {pages}
         </span>
-        <button disabled={current >= pages - 1} onClick={() => onPage(current + 1)} className="rounded-md border border-border px-2.5 py-1 text-label-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink disabled:opacity-40">
+        <button disabled={current >= pages - 1} onClick={() => onPage(current + 1)} className="h-8 rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-40">
           Next
         </button>
       </div>

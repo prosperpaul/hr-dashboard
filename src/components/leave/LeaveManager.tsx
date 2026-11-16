@@ -2,22 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, ShieldCheck } from "lucide-react";
 import {
   usedAllowanceDays,
-  leaveStyle,
+  ALLOWANCE_TYPES,
   formatLeaveRange,
   type LeaveRow,
   type LeaveInput,
   type LeaveEmployee,
 } from "@/lib/leave";
 import { createLeaveRequest, setLeaveStatus, deleteLeaveRequest } from "@/lib/leave-actions";
-import StatCard, { type DashStat } from "@/components/dashboard/StatCard";
-import { Pill } from "@/components/dashboard/Panel";
 import LeaveRequestModal from "./LeaveRequestModal";
 import LeaveCalendar from "./LeaveCalendar";
 import LeaveQueue from "./LeaveQueue";
-import LeaveBalances, { type BalanceRow } from "./LeaveBalances";
+import LeaveList from "./LeaveList";
+import LeaveBalances, { BalanceSpotlight, type BalanceRow } from "./LeaveBalances";
 
 const DAY = 86_400_000;
 const parseDay = (s: string) => {
@@ -52,10 +51,7 @@ export default function LeaveManager({
   // ── Dates ─────────────────────────────────────────────────────────
   const todayDate = parseDay(today);
   const year = todayDate.getFullYear();
-  const monthPrefix = today.slice(0, 7); // "2026-11"
-  const lastMonthPrefix = ymd(new Date(year, todayDate.getMonth() - 1, 1)).slice(0, 7);
-  const weekAhead = ymd(new Date(todayDate.getTime() + 6 * DAY));
-  const twoDaysAgo = ymd(new Date(todayDate.getTime() - 2 * DAY));
+  const weekAhead = ymd(new Date(todayDate.getTime() + 6 * DAY)); // today + 6 days
 
   // ── Balances per employee ─────────────────────────────────────────
   const byEmployee = new Map<string, LeaveRow[]>();
@@ -88,105 +84,48 @@ export default function LeaveManager({
   // ── Headline numbers ──────────────────────────────────────────────
   const pending = requests.filter((r) => r.status === "Pending");
   const approved = requests.filter((r) => r.status === "Approved");
-  const approvedThisMonth = approved.filter((r) => r.startDate.startsWith(monthPrefix));
-  const approvedLastMonth = approved.filter((r) => r.startDate.startsWith(lastMonthPrefix));
-  const daysOf = (rows: LeaveRow[]) => rows.reduce((s, r) => s + r.days, 0);
   const offToday = approved.filter((r) => r.startDate <= today && r.endDate >= today);
-  const offByType = Object.entries(
-    offToday.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.type]: (acc[r.type] ?? 0) + 1 }), {}),
-  ).sort((a, b) => b[1] - a[1]);
+  const offTodayPeople = new Set(offToday.map((r) => r.employeeId)).size;
+  // People off today whose leave ends within the next 7 days.
+  const returningThisWeek = new Set(offToday.filter((r) => r.endDate <= weekAhead).map((r) => r.employeeId)).size;
+  // Share of the team NOT on approved leave today.
+  const capacity = employees.length ? Math.round(((employees.length - offTodayPeople) / employees.length) * 100) : 100;
 
   const avgRemaining = balances.length ? Math.round((balances.reduce((s, b) => s + b.remaining, 0) / balances.length) * 10) / 10 : 0;
   const avgAllowance = balances.length ? Math.round(balances.reduce((s, b) => s + b.allowance, 0) / balances.length) : 0;
   const lowBalance = balances.filter((b) => b.allowance > 0 && b.remaining / b.allowance < 0.25).length;
+  const totalAllowance = balances.reduce((s, b) => s + b.allowance, 0);
+  const totalUsed = balances.reduce((s, b) => s + b.used, 0);
+  // Approved sick days that started this year (they don't touch the allowance).
+  const sickDays = approved.filter((r) => r.type === "Sick" && r.startDate.startsWith(String(year))).reduce((s, r) => s + r.days, 0);
+  const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 
-  const typeDots = (rows: [string, number][]) =>
-    rows.length ? (
-      <div className="mb-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-label-sm text-ink-faint">
-        {rows.slice(0, 3).map(([type, n]) => (
-          <span key={type} className="flex items-center gap-1">
-            <span className={`h-1.5 w-1.5 rounded-full ${leaveStyle(type).dot}`} />
-            <span className="tnum">{n}</span> {type}
-          </span>
-        ))}
-      </div>
-    ) : undefined;
+  // ── View state: which tab, which month, which department ──────────
+  const [tab, setTab] = useState<"timeline" | "Pending" | "Approved" | "Rejected">("timeline");
+  const [month, setMonth] = useState(today.slice(0, 7)); // "YYYY-MM" shown on the timeline
+  const [dept, setDept] = useState("all");
+  const departments = [...new Set(employees.map((e) => e.department).filter((d): d is string => !!d))].sort();
+  const inDept = (r: LeaveRow) => dept === "all" || r.department === dept;
+  const deptRequests = requests.filter(inDept);
 
-  const managerStats: DashStat[] = [
-    {
-      key: "pending",
-      label: "Pending requests",
-      value: String(pending.length),
-      badge: pending.length > 0 ? { text: "Requires action", dot: true } : { text: "All clear", tone: "neutral" },
-      side: <span className="mb-1 mr-auto ml-2 text-body-sm text-ink-faint">awaiting approval</span>,
-      footer: {
-        label: "Submitted in last 48h",
-        value: String(pending.filter((r) => r.createdAt.slice(0, 10) >= twoDaysAgo).length),
-      },
-    },
-    {
-      key: "approved",
-      label: "Approved this month",
-      value: String(daysOf(approvedThisMonth)),
-      side: <span className="mb-1 mr-auto ml-2 text-body-sm text-ink-faint">days · {approvedThisMonth.length} requests</span>,
-      badge: (() => {
-        const diff = daysOf(approvedThisMonth) - daysOf(approvedLastMonth);
-        return diff === 0 ? undefined : { text: `${diff > 0 ? "+" : "−"}${Math.abs(diff)}d vs last mo`, tone: "neutral" as const };
-      })(),
-      footer: { label: "Last month", value: `${daysOf(approvedLastMonth)} days` },
-    },
-    {
-      key: "today",
-      label: "On leave today",
-      value: String(offToday.length),
-      badge: { text: `${employees.length ? Math.round((offToday.length / employees.length) * 1000) / 10 : 0}% of team`, tone: "neutral" },
-      side: typeDots(offByType),
-      footer: { label: "Back within 7 days", value: String(offToday.filter((r) => r.endDate <= weekAhead).length) },
-    },
-    {
-      key: "balance",
-      label: "Average balance",
-      value: `${avgRemaining}d`,
-      badge: { text: `of ${avgAllowance}d allowance`, tone: "neutral" },
-      bar: [
-        { value: avgRemaining, className: "bg-accent" },
-        { value: Math.max(avgAllowance - avgRemaining, 0), className: "bg-transparent" },
-      ],
-      footer: { label: "Under 25% left", value: `${lowBalance} ${lowBalance === 1 ? "person" : "people"}` },
-    },
+  // People with (non-declined) leave touching the shown month — the timeline tab count.
+  const [my, mm] = month.split("-").map(Number);
+  const monthEnd = `${month}-${String(new Date(my, mm, 0).getDate()).padStart(2, "0")}`;
+  const offInMonth = new Set(
+    deptRequests.filter((r) => r.status !== "Rejected" && r.startDate <= monthEnd && r.endDate >= `${month}-01`).map((r) => r.employeeId),
+  ).size;
+
+  const tabs = [
+    { key: "timeline" as const, label: "Timeline", count: offInMonth },
+    { key: "Pending" as const, label: "Pending", count: deptRequests.filter((r) => r.status === "Pending").length },
+    { key: "Approved" as const, label: "Approved", count: deptRequests.filter((r) => r.status === "Approved").length },
+    { key: "Rejected" as const, label: "Declined", count: deptRequests.filter((r) => r.status === "Rejected").length },
   ];
 
-  // Self-service: the balance is the headline.
+  // Self-service figures.
   const mine = balances[0];
   const nextOff = mine?.upcoming;
-  const selfStats: DashStat[] = mine
-    ? [
-        {
-          key: "remaining",
-          label: "Days remaining",
-          value: String(mine.remaining),
-          side: <span className="mb-1 mr-auto ml-2 text-body-sm text-ink-faint">of {mine.allowance}</span>,
-          bar: [
-            { value: mine.remaining, className: "bg-accent" },
-            { value: mine.used, className: "bg-transparent" },
-          ],
-          footer: { label: "Leave year", value: String(year) },
-        },
-        { key: "used", label: "Days used", value: String(mine.used), footer: { label: "Approved Vacation & Personal", value: "" } },
-        {
-          key: "mypending",
-          label: "Pending requests",
-          value: String(pending.length),
-          badge: pending.length > 0 ? { text: "Awaiting approval", dot: true } : undefined,
-        },
-        {
-          key: "next",
-          label: "Next time off",
-          value: nextOff ? formatLeaveRange(nextOff.startDate, nextOff.endDate) : "—",
-          footer: nextOff ? { label: nextOff.type, value: nextOff.status, accent: nextOff.status === "Approved" } : { label: "Nothing scheduled", value: "" },
-        },
-      ]
-    : [];
+  const pendingAllowanceDays = pending.filter((r) => ALLOWANCE_TYPES.includes(r.type)).reduce((s, r) => s + r.days, 0);
 
   // ── Actions (every one is re-checked on the server) ───────────────
   function act(fn: () => Promise<void>, after?: () => void) {
@@ -224,36 +163,54 @@ export default function LeaveManager({
     URL.revokeObjectURL(url);
   }
 
-  const departments = [...new Set(employees.map((e) => e.department).filter((d): d is string => !!d))].sort();
+  // The one-line summary under the headline.
+  const summary = isSelf
+    ? [
+        { text: `${mine?.remaining ?? 0} of ${mine?.allowance ?? 0}`, rest: "days left", dot: true },
+        { text: String(pending.length), rest: "pending approval" },
+        { text: nextOff ? formatLeaveRange(nextOff.startDate, nextOff.endDate) : "Nothing", rest: nextOff ? `next (${nextOff.type})` : "scheduled" },
+      ]
+    : [
+        { text: String(offTodayPeople), rest: "on leave today", dot: true },
+        { text: String(pending.length), rest: "pending approval" },
+        { text: String(returningThisWeek), rest: "returning this week" },
+        { text: `${capacity}%`, rest: "of the team available today" },
+      ];
 
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <section className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2 text-label-sm uppercase tracking-wider text-ink-faint">
+      <section className="flex flex-col justify-between gap-5 border-b border-border pb-6 lg:flex-row lg:items-start">
+        <div className="min-w-0 space-y-2">
+          <p className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
             <span>Operations</span>
-            <span>/</span>
-            <span className="normal-case tracking-normal text-ink-muted">Leave</span>
-            <Pill tone="accent" dot>
-              Leave year {year}
-            </Pill>
-          </div>
-          <h1 className="text-headline-lg text-ink md:text-headline-xl">{canManage ? "Leave Management" : "My Leave"}</h1>
+            <span className="h-1 w-1 rounded-full bg-accent" />
+            <span>Time off &amp; absence calendar</span>
+          </p>
+          <h1 className="text-headline-lg text-ink md:text-headline-xl">{canManage ? "Who’s off, and when." : "Your time off, at a glance."}</h1>
           <p className="max-w-2xl text-body-md text-ink-muted">
             {isPending
               ? "Working…"
               : canManage
-                ? "Review time off, track balances against allowances, and approve pending requests."
-                : "Request time off and keep track of your balance."}
+                ? `Team availability, pending approvals and ${year} allowance balances across ${employees.length} ${employees.length === 1 ? "person" : "people"} in ${departments.length} ${departments.length === 1 ? "department" : "departments"}.`
+                : `Request time off, track what's pending, and keep an eye on your ${year} allowance.`}
           </p>
+          <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-body-sm text-ink-muted">
+            {summary.map((s, i) => (
+              <li key={s.rest} className="flex items-center gap-1.5">
+                {i > 0 && <span className="mr-1.5 text-border-strong">/</span>}
+                {s.dot && <span className="h-2 w-2 rounded-full bg-critical" />}
+                <span className="tnum font-bold text-ink">{s.text}</span> {s.rest}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             onClick={exportCsv}
             disabled={requests.length === 0}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 text-label-md text-ink transition-colors hover:border-border-strong hover:bg-white/[0.03] disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             Export CSV
@@ -262,7 +219,7 @@ export default function LeaveManager({
             <button
               onClick={() => setModalOpen(true)}
               disabled={isPending || employees.length === 0}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
               Request leave
@@ -271,21 +228,64 @@ export default function LeaveManager({
         </div>
       </section>
 
-      {/* ── KPI cards ── */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {(isSelf ? selfStats : managerStats).map((s) => (
-          <StatCard key={s.key} stat={s} />
+      {/* ── Tabs: the timeline, or a list of requests in one status ── */}
+      <nav className="flex gap-6 overflow-x-auto border-b border-border" role="tablist">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={[
+              "-mb-px flex shrink-0 items-center gap-2 border-b-2 pb-3 pt-1 font-display text-label-md font-semibold transition-colors",
+              tab === t.key ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink",
+            ].join(" ")}
+          >
+            {t.label}
+            <span
+              className={[
+                "tnum rounded-full px-2 text-[11px] font-bold",
+                tab === t.key ? "bg-navy text-on-navy" : t.key === "Pending" && t.count > 0 ? "bg-critical/10 text-critical" : "bg-surface-2 text-ink-muted",
+              ].join(" ")}
+            >
+              {t.count}
+            </span>
+          </button>
         ))}
-      </section>
+      </nav>
 
-      {/* ── Calendar + queue ── */}
+      {/* ── Main column + right rail ── */}
       <section className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-        <div className="xl:col-span-8">
-          <LeaveCalendar requests={requests} departments={canManage ? departments : []} today={today} />
+        <div className="min-w-0 xl:col-span-8">
+          {tab === "timeline" ? (
+            <LeaveCalendar
+              requests={deptRequests}
+              departments={canManage ? departments : []}
+              today={today}
+              month={month}
+              onMonthChange={setMonth}
+              dept={dept}
+              onDeptChange={setDept}
+            />
+          ) : (
+            <LeaveList
+              rows={deptRequests.filter((r) => r.status === tab)}
+              status={tab}
+              canManage={canManage}
+              isSelf={isSelf}
+              busy={isPending}
+              onStatus={handleStatus}
+              onDelete={handleDelete}
+            />
+          )}
         </div>
-        <div className="xl:col-span-4">
+
+        <div className="space-y-6 xl:col-span-4">
           <LeaveQueue
-            requests={requests}
+            pending={pending}
+            allRequests={requests}
+            today={today}
+            weekAhead={weekAhead}
             remainingFor={remainingFor}
             canManage={canManage}
             isSelf={isSelf}
@@ -293,10 +293,61 @@ export default function LeaveManager({
             onStatus={handleStatus}
             onDelete={handleDelete}
           />
+
+          {isSelf && mine ? (
+            <BalanceSpotlight
+              eyebrow="Balance spotlight"
+              title={`Your ${year} allowance`}
+              badge={mine.department ?? undefined}
+              items={[
+                {
+                  label: "Paid allowance",
+                  figure: `${mine.remaining} of ${mine.allowance}d remaining`,
+                  pct: pct(mine.remaining, mine.allowance),
+                  note: "Vacation and Personal days count against it",
+                  warn: mine.allowance > 0 && mine.remaining / mine.allowance < 0.25,
+                },
+                { label: "Days used", figure: `${mine.used}d approved`, pct: pct(mine.used, mine.allowance) },
+                { label: "Waiting for approval", figure: `${pendingAllowanceDays}d of allowance` },
+                { label: "Sick leave taken", figure: `${sickDays}d this year`, note: "Doesn't reduce your allowance" },
+              ]}
+            />
+          ) : canManage ? (
+            <BalanceSpotlight
+              eyebrow="Balance spotlight"
+              title="Whole team"
+              badge={`${employees.length} ${employees.length === 1 ? "member" : "members"}`}
+              items={[
+                {
+                  label: "Average balance",
+                  figure: `${avgRemaining} of ${avgAllowance}d remaining`,
+                  pct: pct(avgRemaining, avgAllowance),
+                  note: "Paid allowance per person (Vacation and Personal)",
+                },
+                { label: "Allowance used", figure: `${totalUsed} of ${totalAllowance}d`, pct: pct(totalUsed, totalAllowance) },
+                { label: "Sick leave taken", figure: `${sickDays}d in ${year}` },
+                { label: "Under 25% left", figure: `${lowBalance} ${lowBalance === 1 ? "person" : "people"}`, warn: lowBalance > 0 },
+              ]}
+              linkHref="#balances"
+              linkLabel="View every balance"
+            />
+          ) : null}
+
+          {/* How the allowance works (the app's real rule, not a made-up policy) */}
+          <div className="flex gap-3 rounded-xl border border-border bg-surface-2 p-5">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-ink" />
+            <div>
+              <p className="font-display text-label-md font-semibold text-ink">How the {year} allowance works</p>
+              <p className="mt-1 text-body-sm text-ink-muted">
+                Approved Vacation and Personal days count against each person&apos;s yearly allowance. Sick and Unpaid leave don&apos;t.
+                Balances count leave that starts in the current calendar year.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ── Balances (managers only — self-service sees theirs in the cards) ── */}
+      {/* ── Balances table (managers only — self-service sees theirs in the rail) ── */}
       {canManage && <LeaveBalances rows={balances} year={year} />}
 
       <LeaveRequestModal

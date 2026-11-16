@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, LogOut } from "lucide-react";
+import { LogOut, Network } from "lucide-react";
 import { navSections } from "@/lib/nav";
 import { logout } from "@/lib/auth-actions";
 
@@ -37,28 +37,23 @@ export default function Sidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-border bg-surface">
+    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-navy-line bg-navy text-on-navy">
       {/* Brand */}
-      <div className="flex h-14 items-center px-3">
-        <div className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface-2 px-2 py-1.5">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]">
-            <Users className="h-4 w-4 text-on-accent" />
-          </div>
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-label-md text-ink">HR Dashboard</p>
-            <p className="truncate text-label-sm font-normal text-ink-faint">People operations</p>
-          </div>
+      <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-navy-line px-6">
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-on-accent">
+          <Network className="h-[18px] w-[18px]" />
         </div>
+        <span className="font-display truncate text-[18px] font-bold tracking-tight">HR Dashboard</span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-3">
+      <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6 [scrollbar-color:var(--color-navy-line)_transparent]">
         {navSections.map((section) => (
           <div key={section.heading}>
-            <p className="mb-1 px-2 text-label-sm uppercase tracking-wider text-ink-faint">
+            <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-[0.06em] text-on-navy-muted">
               {section.heading}
             </p>
-            <ul className="space-y-0.5">
+            <ul className="flex flex-col gap-1">
               {section.items
                 // Hide admin-only links from non-Admins.
                 .filter((item) => !item.adminOnly || user.role === "Admin")
@@ -72,29 +67,23 @@ export default function Sidebar({
                     <li key={item.href}>
                       <Link
                         href={item.href}
+                        aria-current={active ? "page" : undefined}
                         className={[
-                          // A 2px left border is always there; it's only
-                          // coloured when active, so text never shifts.
-                          "group flex items-center gap-2.5 rounded-r-lg border-l-2 px-2 py-1.5 text-label-md transition-colors",
+                          // Active page = white text + a short butter-yellow
+                          // bar on the left edge (drawn with ::before).
+                          "relative flex items-center gap-3 rounded px-3 py-2 text-body-md transition-colors",
                           active
-                            ? "border-accent bg-surface-2 text-ink"
-                            : "border-transparent text-ink-muted hover:bg-surface-2 hover:text-ink",
+                            ? "font-semibold text-on-navy before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r before:bg-accent"
+                            : "text-on-navy-muted hover:text-on-navy",
                         ].join(" ")}
                       >
-                        <Icon
-                          className={[
-                            "h-[18px] w-[18px] shrink-0 transition-colors",
-                            active ? "text-accent" : "text-ink-faint group-hover:text-ink",
-                          ].join(" ")}
-                        />
+                        <Icon className="h-[18px] w-[18px] shrink-0" />
                         <span className="flex-1">{item.label}</span>
                         {badge > 0 && (
-                          <span className="tnum rounded-full bg-accent-soft px-1.5 py-0.5 text-label-sm text-accent-hover">
-                            {badge}
-                          </span>
+                          <span className="tnum rounded-full bg-accent px-1.5 py-0.5 text-label-sm text-on-accent">{badge}</span>
                         )}
                         {item.soon && (
-                          <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-label-sm text-ink-faint">
+                          <span className="rounded-full border border-navy-line px-1.5 py-0.5 text-label-sm text-on-navy-muted">
                             Soon
                           </span>
                         )}
@@ -108,14 +97,14 @@ export default function Sidebar({
       </nav>
 
       {/* Logged-in user + sign out */}
-      <div className="p-3">
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-2 p-2">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft text-label-sm font-semibold text-accent-hover">
+      <div className="border-t border-navy-line p-4">
+        <div className="flex items-center gap-2.5 rounded-lg bg-navy-2 px-3 py-2">
+          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-label-sm font-bold text-on-accent">
             {initialsOf(user.name)}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-label-md text-ink">{user.name ?? "User"}</p>
-            <p className="truncate text-label-sm font-normal text-ink-faint">{user.role ?? user.email}</p>
+            <p className="truncate text-label-md text-on-navy">{user.name ?? "User"}</p>
+            <p className="truncate text-[11px] font-bold uppercase tracking-[0.06em] text-on-navy-muted">{user.role ?? user.email}</p>
           </div>
           {/* Sign out — posts to the `logout` server action, which clears the
               session cookie and redirects to /login. A form (not a link) so it
@@ -124,7 +113,7 @@ export default function Sidebar({
             <button
               type="submit"
               aria-label="Sign out"
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded text-on-navy-muted transition-colors hover:text-on-navy"
             >
               <LogOut className="h-4 w-4" />
             </button>

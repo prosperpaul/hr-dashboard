@@ -3,22 +3,20 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
-// Default to the current month as "YYYY-MM".
-function currentPeriod(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 export default function PayRunModal({
   open,
+  defaultPeriod,
   onClose,
   onCreate,
 }: {
   open: boolean;
+  defaultPeriod: string; // "YYYY-MM" — the current month, decided on the server
+
   onClose: () => void;
   onCreate: (period: string) => void;
 }) {
-  const [period, setPeriod] = useState(currentPeriod());
+  const [period, setPeriod] = useState(defaultPeriod);
   const [error, setError] = useState("");
 
   // Reset the form each time the panel opens. This runs during render at the
@@ -28,7 +26,7 @@ export default function PayRunModal({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setPeriod(currentPeriod());
+      setPeriod(defaultPeriod);
       setError("");
     }
   }
@@ -52,13 +50,13 @@ export default function PayRunModal({
   }
 
   const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent";
+    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
-      <div className="absolute inset-0 bg-bg/80 backdrop-blur-md" onClick={onClose} />
+      <div className="absolute inset-0 bg-navy/45" onClick={onClose} />
 
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm rounded-xl border border-border-strong bg-surface-2 shadow-modal">
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm rounded-xl border border-border bg-surface shadow-modal">
         <div className="flex items-center justify-between border-b border-border px-5 h-14">
           <h2 className="text-headline-sm text-ink">New pay run</h2>
           <button
@@ -73,7 +71,7 @@ export default function PayRunModal({
 
         <form onSubmit={handleSubmit} className="p-5">
           <label className="block">
-            <span className="mb-1.5 block text-label-sm uppercase tracking-wider text-ink-faint">Pay period</span>
+            <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Pay period</span>
             <input
               className={inputClass}
               value={period}
@@ -96,13 +94,13 @@ export default function PayRunModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-9 rounded-lg border border-border bg-surface px-4 text-label-md text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
+              className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="h-9 rounded-lg bg-accent px-4 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed"
+              className="h-10 rounded-full bg-accent px-5 text-label-md text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
             >
               Generate
             </button>

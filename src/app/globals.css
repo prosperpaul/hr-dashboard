@@ -2,140 +2,183 @@
 
 /*
   ─────────────────────────────────────────────────────────────
-  DESIGN SYSTEM — "Obsidian Precision"
-  Our colors & tokens, defined once, reused everywhere.
-  These become Tailwind utility classes, e.g. --color-surface  ->  bg-surface
-
-  The token NAMES stayed the same as before, only the VALUES changed —
-  so every page picks up the new look automatically.
+  DESIGN SYSTEM — "Warm Editorial People Ops"
+  Paper-white canvas, deep navy ink, butter-yellow accent.
+  Defined once here; every page uses these token names
+  (bg-surface, text-ink, bg-accent …), so changing a value
+  here re-skins the whole app.
   ─────────────────────────────────────────────────────────────
 */
 @theme {
-  /* Surfaces — tonal layers instead of shadows, darkest -> lightest */
-  --color-bg: #090a0b;          /* Level 0: canvas (page background) */
-  --color-surface: #111315;     /* Level 1: cards, sidebar, top bar */
-  --color-surface-2: #17191c;   /* Level 2: inputs, dropdowns, modals, hover */
+  /* Fonts (loaded in app/layout.tsx) */
+  --font-sans: var(--font-dm-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-bricolage), var(--font-dm-sans), system-ui, sans-serif;
 
-  /* Hairline borders */
-  --color-border: #22262b;          /* default 1px partitions */
-  --color-border-strong: #2d3139;   /* hover / interactive / elevated */
+  /* Surfaces — paper canvas, white cards */
+  --color-bg: #f7f7f5;          /* Level 0: warm unbleached paper */
+  --color-surface: #ffffff;     /* Level 1: cards, top bar, inputs */
+  --color-surface-2: #f4f4f2;   /* hover rows, quiet fills */
 
-  /* Text (ink) */
-  --color-ink: #f3f4f6;         /* primary text */
-  --color-ink-muted: #b0b6c0;   /* secondary labels, subtitles, icons */
-  --color-ink-faint: #858c98;   /* hints, timestamps, placeholders (lifted for readability) */
+  /* Hairline rules */
+  --color-border: #e2e4e9;
+  --color-border-strong: #c9cdd6;
 
-  /* Emerald accent — reserved for high-salience moments only */
-  --color-accent: #10b981;          /* primary buttons, active states */
-  --color-accent-hover: #34d399;    /* hover (brighter, per the spec) */
-  --color-accent-pressed: #059669;  /* active / pressed */
-  --color-accent-soft: rgb(16 185 129 / 0.1); /* faint emerald tint for badges */
-  --color-on-accent: #090a0b;       /* text/icons placed ON the emerald */
+  /* Ink */
+  --color-ink: #101b3a;         /* deep navy — primary text */
+  --color-ink-muted: #5c6478;   /* muted slate — supporting copy */
+  --color-ink-faint: #6e7588;   /* timestamps, hints */
 
-  /* Status colors */
-  --color-good: #10b981;
-  --color-warning: #fab219;
-  --color-critical: #f87171;
+  /* "Navy band" — sidebar, hero stat banner */
+  --color-navy: #101b3a;
+  --color-navy-2: #1a2750;      /* hover / raised on navy */
+  --color-navy-line: #26335c;   /* hairlines on navy */
+  --color-on-navy: #ffffff;
+  --color-on-navy-muted: #a5acb8;
 
-  /* Chart series (categorical) */
-  --color-chart-1: #10b981;
-  --color-chart-2: #3987e5;
-  --color-chart-3: #c98500;
-  --color-chart-4: #9085e9;
-  --color-chart-mint: #a7f3d0; /* pale emerald (2nd donut segment) */
-  --color-chart-sage: #86948a; /* grey-green (3rd donut segment) */
+  /* Butter yellow — ALWAYS paired with navy text, never white */
+  --color-accent: #f5c518;          /* fills: primary buttons, active chips */
+  --color-accent-hover: #e8b90c;
+  --color-accent-pressed: #d6aa08;
+  --color-accent-soft: #fdf3c4;     /* pale butter tint for badges */
+  --color-accent-ink: #745b00;      /* readable gold for TEXT on white */
+  --color-on-accent: #101b3a;
+
+  /* Status */
+  --color-good: #1f7a4d;
+  --color-warning: #a55f00;
+  --color-critical: #ba1a1a;
+
+  /* Department / category tints (backgrounds, paired with navy text) */
+  --color-tint-peach: #fce8de;
+  --color-tint-sky: #e1effe;
+  --color-tint-rose: #fde8e8;
+  --color-tint-sand: #f5efe6;
+  --color-tint-lilac: #eae8f2;
+
+  /* Chart series */
+  --color-chart-1: #101b3a;
+  --color-chart-2: #f5c518;
+  --color-chart-3: #8a94ab;
+  --color-chart-4: #c9cdd6;
+  --color-chart-mint: #f5c518;
+  --color-chart-sage: #8a94ab;
+
+  /* Pale Tailwind tints used as badge TEXT — darkened so they read on white */
+  --color-sky-300: #0b5c9e;
+  --color-violet-300: #5b3fb0;
+  --color-indigo-300: #3b47a8;
+
+  /* Shapes: content modules are a crisp 6px; pills stay fully round */
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.5rem;
 
   /*
-    Type scale. Each size also carries its line-height, tracking and weight,
-    so one class like `text-label-sm` sets all four at once.
+    Type scale. Each size also carries its line-height, tracking and weight.
+    Headline + metric sizes are switched to Bricolage Grotesque below.
   */
-  --text-headline-xl: 36px;
+  --text-headline-xl: 40px;
   --text-headline-xl--line-height: 44px;
-  --text-headline-xl--letter-spacing: -0.025em;
-  --text-headline-xl--font-weight: 600;
-  --text-headline-lg: 28px;
-  --text-headline-lg--line-height: 36px;
+  --text-headline-xl--letter-spacing: -0.03em;
+  --text-headline-xl--font-weight: 700;
+  --text-headline-lg: 32px;
+  --text-headline-lg--line-height: 38px;
   --text-headline-lg--letter-spacing: -0.02em;
-  --text-headline-lg--font-weight: 600;
-  --text-headline-md: 20px;
+  --text-headline-lg--font-weight: 700;
+  --text-headline-md: 22px;
   --text-headline-md--line-height: 28px;
   --text-headline-md--letter-spacing: -0.015em;
   --text-headline-md--font-weight: 600;
-  --text-headline-sm: 16px;
+  --text-headline-sm: 17px;
   --text-headline-sm--line-height: 24px;
   --text-headline-sm--letter-spacing: -0.01em;
   --text-headline-sm--font-weight: 600;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
   --text-body-md: 14px;
   --text-body-md--line-height: 20px;
-  --text-body-sm: 12px;
-  --text-body-sm--line-height: 16px;
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 18px;
   --text-label-md: 13px;
-  --text-label-md--line-height: 18px;
+  --text-label-md--line-height: 16px;
   --text-label-md--letter-spacing: 0.01em;
-  --text-label-md--font-weight: 500;
+  --text-label-md--font-weight: 600;
   --text-label-sm: 11px;
   --text-label-sm--line-height: 14px;
-  --text-label-sm--letter-spacing: 0.02em;
-  --text-label-sm--font-weight: 500;
-  --text-metric-lg: 32px;
-  --text-metric-lg--line-height: 38px;
+  --text-label-sm--letter-spacing: 0.04em;
+  --text-label-sm--font-weight: 600;
+  --text-metric-lg: 40px;
+  --text-metric-lg--line-height: 44px;
   --text-metric-lg--letter-spacing: -0.02em;
-  --text-metric-lg--font-weight: 600;
-  --text-metric-md: 24px;
-  --text-metric-md--line-height: 30px;
-  --text-metric-md--letter-spacing: -0.015em;
-  --text-metric-md--font-weight: 500;
+  --text-metric-lg--font-weight: 700;
+  --text-metric-md: 28px;
+  --text-metric-md--line-height: 32px;
+  --text-metric-md--letter-spacing: -0.01em;
+  --text-metric-md--font-weight: 600;
 
-  /* Elevation shadows (Level 2 popovers, Level 3 modals) */
-  --shadow-popover: 0 12px 32px -4px rgb(0 0 0 / 0.65), 0 4px 12px -2px rgb(0 0 0 / 0.45);
-  --shadow-modal: 0 24px 48px -12px rgb(0 0 0 / 0.85);
+  /* Elevation: flat cards; only overlays get a soft offset shadow */
+  --shadow-popover: 0 4px 12px rgb(16 27 58 / 0.08);
+  --shadow-modal: 0 12px 32px rgb(16 27 58 / 0.16);
+}
+
+/*
+  Editorial display face for headlines and big numbers. Tailwind's text-*
+  size classes can't carry a font family, so we attach it here.
+*/
+[class*="text-headline-"],
+[class*="text-metric-"],
+.font-display {
+  font-family: var(--font-display);
 }
 
 /*
   ─────────────────────────────────────────────────────────────
-  LIGHT MODE
-  Dark is the default (the values in @theme above). When <html> has
-  data-theme="light", we swap the SAME token names to light values —
-  every bg-surface / text-ink / bg-accent class in the app follows
-  automatically, no component changes needed.
-
-  The emerald is darkened in light mode (#047857) so text and white
-  button labels stay readable on a white background.
+  DARK MODE ("night edition")
+  Light paper is the default. data-theme="dark" swaps the same token
+  names to a deep-navy palette; butter yellow still carries the accent.
   ─────────────────────────────────────────────────────────────
 */
-:root[data-theme="light"] {
-  color-scheme: light;
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-  --color-bg: #f5f6f8;
-  --color-surface: #ffffff;
-  --color-surface-2: #f0f2f5;
-  --color-border: #e1e4e9;
-  --color-border-strong: #c9ced6;
+  --color-bg: #0a1128;
+  --color-surface: #101b3a;
+  --color-surface-2: #17244a;
+  --color-border: #243159;
+  --color-border-strong: #33427a;
 
-  --color-ink: #111827;
-  --color-ink-muted: #374151;
-  --color-ink-faint: #5b6472;
+  --color-ink: #f1f1ef;
+  --color-ink-muted: #b4bac6;
+  --color-ink-faint: #8b93a6;
 
-  --color-accent: #047857;
-  --color-accent-hover: #065f46;
-  --color-accent-pressed: #064e3b;
-  --color-accent-soft: rgb(4 120 87 / 0.1);
-  --color-on-accent: #ffffff;
+  --color-navy: #0d1632;
+  --color-navy-2: #17244a;
+  --color-navy-line: #243159;
 
-  --color-good: #047857;
-  --color-warning: #b45309;
-  --color-critical: #dc2626;
+  --color-accent-soft: rgb(245 197 24 / 0.14);
+  --color-accent-ink: #f5c518;
 
-  --color-chart-mint: #6ee7b7;
-  --color-chart-sage: #94a3b8;
+  --color-good: #4cc38a;
+  --color-warning: #f0b44c;
+  --color-critical: #ff8a80;
 
-  /* Pale tints used as TEXT on badges would vanish on white — darken them. */
-  --color-sky-300: #0369a1;
-  --color-violet-300: #6d28d9;
-  --color-indigo-300: #4338ca;
+  --color-tint-peach: rgb(252 232 222 / 0.14);
+  --color-tint-sky: rgb(225 239 254 / 0.14);
+  --color-tint-rose: rgb(253 232 232 / 0.14);
+  --color-tint-sand: rgb(245 239 230 / 0.14);
+  --color-tint-lilac: rgb(234 232 242 / 0.14);
 
-  --shadow-popover: 0 12px 32px -8px rgb(15 23 42 / 0.18), 0 4px 12px -4px rgb(15 23 42 / 0.1);
-  --shadow-modal: 0 24px 48px -12px rgb(15 23 42 / 0.25);
+  --color-chart-1: #f1f1ef;
+  --color-chart-3: #6f7a96;
+  --color-chart-4: #33427a;
+  --color-chart-sage: #6f7a96;
+
+  --color-sky-300: #9cc8f5;
+  --color-violet-300: #c4b5fd;
+  --color-indigo-300: #a5b4fc;
+
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-modal: 0 16px 40px rgb(0 0 0 / 0.6);
 }
 
 /*
@@ -164,16 +207,15 @@
   to { opacity: 1; transform: none; }
 }
 
-/* Dark is the default look. */
+/* Light paper is the default look. */
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   background: var(--color-bg);
   color: var(--color-ink);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
-  letter-spacing: -0.005em;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -182,11 +224,19 @@ body {
   and metrics line up vertically. Add the `tnum` class to any number.
 */
 @utility tnum {
-  font-variant-numeric: tabular-nums slashed-zero;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Thin, quiet scrollbars */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
+}
+
+/*
+  Focus: a crisp 2px navy outline with a 2px gap — no fuzzy halos.
+*/
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }

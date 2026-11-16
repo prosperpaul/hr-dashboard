@@ -69,7 +69,12 @@ export default async function DepartmentsPage() {
       topRoles,
       roleCount: Object.keys(roleCounts).length,
       // Only a few faces for the avatar stack — the rest become "+N".
-      members: people.slice(0, 4).map((p) => ({ id: p.id, initials: initialsOf(p.name), name: p.name })),
+      members: people.slice(0, 5).map((p) => ({ id: p.id, initials: initialsOf(p.name), name: p.name })),
+      // People are sorted by start date (oldest first), so the first one is
+      // the longest-serving member — shown as the card's "anchor" person.
+      veteran: people[0]
+        ? { name: people[0].name, role: people[0].role, initials: initialsOf(people[0].name), since: people[0].startedAt }
+        : null,
     };
   });
 

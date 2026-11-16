@@ -1,17 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarDays, Trash2 } from "lucide-react";
-import { initialsOf } from "@/lib/sample-data";
-import { ALLOWANCE_TYPES, LEAVE_STATUSES, formatLeaveRange, leaveStyle, type LeaveRow } from "@/lib/leave";
+import { CalendarDays, AlertTriangle, CheckCircle2, Trash2, Info } from "lucide-react";
+import { ALLOWANCE_TYPES, formatLeaveRange, leaveStyle, type LeaveRow } from "@/lib/leave";
+import Avatar from "./Avatar";
 
 /*
-  "Queue & Triage": requests grouped into Pending / Approved / Rejected tabs.
-  Pending cards get Approve/Reject (managers only); every card can be
-  deleted (managers) or cancelled (the employee's own request).
+  "Waiting for approval" — the right-hand rail of PENDING requests.
+  Managers get Decline / Approve on each card; everyone can delete
+  (managers) or cancel (their own request).
+
+  For managers each card also runs a real COVERAGE CHECK: who else in the
+  same department has approved or pending leave overlapping these dates.
 */
 export default function LeaveQueue({
-  requests,
+  pending,
+  allRequests,
+  today,
+  weekAhead,
   remainingFor,
   canManage,
   isSelf,
@@ -19,7 +24,10 @@ export default function LeaveQueue({
   onStatus,
   onDelete,
 }: {
-  requests: LeaveRow[];
+  pending: LeaveRow[]; // the pending requests to show (already filtered)
+  allRequests: LeaveRow[]; // everything, for the coverage check
+  today: string;
+  weekAhead: string; // today + 6 days — a request starting by then is "urgent"
   remainingFor: (employeeId: string) => { remaining: number; allowance: number } | null;
   canManage: boolean;
   isSelf: boolean;
@@ -27,119 +35,128 @@ export default function LeaveQueue({
   onStatus: (row: LeaveRow, status: "Approved" | "Rejected") => void;
   onDelete: (row: LeaveRow) => void;
 }) {
-  const [tab, setTab] = useState<string>("Pending");
+  // Soonest first, so the most time-sensitive request is on top.
+  const list = [...pending].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const urgent = list.filter((r) => r.startDate <= weekAhead).length;
 
-  const counts = Object.fromEntries(LEAVE_STATUSES.map((s) => [s, requests.filter((r) => r.status === s).length]));
-  // Pending: soonest first. Others: most recent first.
-  const list = requests
-    .filter((r) => r.status === tab)
-    .sort((a, b) => (tab === "Pending" ? a.startDate.localeCompare(b.startDate) : b.startDate.localeCompare(a.startDate)));
-
-  const accentBar: Record<string, string> = {
-    Pending: "border-l-accent",
-    Approved: "border-l-border-strong",
-    Rejected: "border-l-critical/50",
-  };
+  // Other people in the same department who are off during this request.
+  const overlapsFor = (r: LeaveRow) =>
+    r.department
+      ? [
+          ...new Set(
+            allRequests
+              .filter(
+                (o) =>
+                  o.employeeId !== r.employeeId &&
+                  o.department === r.department &&
+                  o.status !== "Rejected" &&
+                  o.startDate <= r.endDate &&
+                  o.endDate >= r.startDate,
+              )
+              .map((o) => o.employeeName),
+          ),
+        ]
+      : [];
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-headline-md text-ink">{isSelf ? "My Requests" : "Queue & Triage"}</h2>
-        {counts.Pending > 0 && <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)]" />}
+    <section className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-bg px-5 py-4">
+        <h2 className="flex items-center gap-2 text-headline-sm text-ink">
+          <span className={`h-2.5 w-2.5 rounded-full ${list.length ? "bg-critical" : "bg-good"}`} />
+          {isSelf ? "Your pending requests" : "Waiting for approval"}
+        </h2>
+        {urgent > 0 ? (
+          <span className="tnum rounded-full bg-critical/10 px-2.5 py-0.5 text-label-sm font-bold text-critical">{urgent} urgent</span>
+        ) : (
+          <span className="tnum rounded-full bg-surface-2 px-2.5 py-0.5 text-label-sm text-ink-muted">{list.length}</span>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="mt-4 flex rounded-lg border border-border bg-bg p-0.5" role="tablist">
-        {LEAVE_STATUSES.map((s) => (
-          <button
-            key={s}
-            role="tab"
-            aria-selected={tab === s}
-            onClick={() => setTab(s)}
-            className={[
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-label-sm transition-colors",
-              tab === s ? "bg-surface-2 text-accent-hover" : "text-ink-faint hover:text-ink",
-            ].join(" ")}
-          >
-            {s}
-            <span className="tnum rounded-full bg-bg px-1.5 text-[10px] text-ink-muted">{counts[s]}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Cards */}
-      <div className="mt-4 max-h-[720px] space-y-3 overflow-y-auto pr-1">
+      <div className="max-h-[760px] divide-y divide-border overflow-y-auto">
         {list.map((r) => {
           const bal = ALLOWANCE_TYPES.includes(r.type) ? remainingFor(r.employeeId) : null;
+          const overlaps = canManage ? overlapsFor(r) : [];
+          const startsSoon = r.startDate <= weekAhead;
+          const late = r.startDate < today; // asked for after the leave already started
           return (
-            <article key={r.id} className={`rounded-lg border border-border border-l-2 ${accentBar[r.status] ?? ""} bg-surface-2 p-3.5`}>
+            <article key={r.id} className="p-5">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg text-label-sm font-semibold text-accent-hover">
-                    {initialsOf(r.employeeName)}
-                  </div>
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={r.employeeName} department={r.department} size={36} />
                   <div className="min-w-0">
-                    <p className="truncate text-label-md text-ink">{r.employeeName}</p>
-                    <p className="truncate text-body-sm text-ink-faint">{r.department ?? "No department"}</p>
+                    <p className="truncate font-display text-label-md font-semibold text-ink">{r.employeeName}</p>
+                    <p className="truncate text-body-sm text-ink-muted">{r.department ?? "No department"}</p>
                   </div>
                 </div>
-                <span className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-label-sm ${leaveStyle(r.type).chip}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${leaveStyle(r.type).dot}`} />
-                  {r.type}
+                <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-label-sm font-semibold ${leaveStyle(r.type).chip}`}>{r.type}</span>
+              </div>
+
+              <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-body-md text-ink">
+                <CalendarDays className="h-4 w-4 text-ink-muted" />
+                <span className="font-semibold">{formatLeaveRange(r.startDate, r.endDate)}</span>
+                <span className="tnum text-ink-muted">
+                  · {r.days} {r.days === 1 ? "day" : "days"}
+                  {late ? " (retrospective)" : startsSoon ? " · starts within a week" : ""}
                 </span>
-              </div>
+              </p>
 
-              <div className="mt-3 rounded-md border border-border bg-bg/60 p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-label-md text-ink">
-                    <CalendarDays className="h-3.5 w-3.5 text-ink-faint" />
-                    {formatLeaveRange(r.startDate, r.endDate)}
-                  </span>
-                  <span className="tnum text-label-md text-accent-hover">
-                    {r.days} {r.days === 1 ? "day" : "days"}
-                  </span>
-                </div>
-                {bal && (
-                  <div className="mt-1.5 flex items-center justify-between text-body-sm">
-                    <span className="text-ink-faint">Remaining allowance</span>
-                    <span className="tnum text-ink-muted">
-                      {bal.remaining} of {bal.allowance} days
-                    </span>
+              {bal && (
+                <p className="tnum mt-1 text-body-sm text-ink-muted">
+                  {bal.remaining} of {bal.allowance} allowance days left
+                </p>
+              )}
+
+              {/* Coverage check (managers only) */}
+              {canManage &&
+                (overlaps.length > 0 ? (
+                  <div className="mt-3 flex gap-2 rounded-md border border-critical/30 bg-critical/10 p-3 text-body-sm text-critical">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>
+                      <span className="font-bold">Coverage warning:</span> {overlaps.length} {overlaps.length === 1 ? "other" : "others"} in{" "}
+                      {r.department} {overlaps.length === 1 ? "is" : "are"} off at the same time ({overlaps.join(", ")}).
+                    </p>
                   </div>
-                )}
-              </div>
+                ) : r.department ? (
+                  <div className="mt-3 flex gap-2 rounded-md bg-surface-2 p-3 text-body-sm text-ink-muted">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>No one else in {r.department} is off on these dates.</p>
+                  </div>
+                ) : null)}
 
-              {r.reason && <p className="mt-2.5 text-body-sm italic text-ink-muted">&ldquo;{r.reason}&rdquo;</p>}
+              {r.reason && (
+                <div className="mt-3 flex gap-2 rounded-md border border-accent/40 bg-accent-soft p-3 text-body-sm text-ink">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent-ink" />
+                  <p>Note: {r.reason}</p>
+                </div>
+              )}
 
-              <div className="mt-3 flex items-center gap-2">
-                {canManage && r.status === "Pending" ? (
+              <div className="mt-4 flex items-center gap-2">
+                {canManage ? (
                   <>
                     <button
                       disabled={busy}
                       onClick={() => onStatus(r, "Rejected")}
-                      className="h-8 flex-1 rounded-md border border-border bg-surface text-label-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink disabled:opacity-50"
+                      className="h-9 flex-1 rounded-full border border-border bg-surface text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
                     >
-                      Reject
+                      Decline
                     </button>
                     <button
                       disabled={busy}
                       onClick={() => onStatus(r, "Approved")}
-                      className="h-8 flex-1 rounded-md bg-accent text-label-sm font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-50"
+                      className="h-9 flex-1 rounded-full bg-navy text-label-md font-semibold text-on-navy transition-colors hover:bg-navy-2 disabled:opacity-50"
                     >
-                      Approve
+                      Approve leave
                     </button>
                   </>
                 ) : (
-                  <span className="flex-1 text-body-sm text-ink-faint">
-                    Submitted {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
+                  <span className="flex-1 text-body-sm text-ink-muted">Submitted {formatLeaveRange(r.createdAt.slice(0, 10), r.createdAt.slice(0, 10))}</span>
                 )}
                 <button
                   disabled={busy}
                   onClick={() => onDelete(r)}
                   aria-label={`${isSelf ? "Cancel" : "Delete"} request`}
                   title={isSelf ? "Cancel request" : "Delete request"}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-faint transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-muted transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -148,11 +165,7 @@ export default function LeaveQueue({
           );
         })}
 
-        {list.length === 0 && (
-          <p className="py-10 text-center text-body-md text-ink-muted">
-            {tab === "Pending" ? "Nothing waiting — all caught up 🎉" : `No ${tab.toLowerCase()} requests.`}
-          </p>
-        )}
+        {list.length === 0 && <p className="px-5 py-10 text-center text-body-md text-ink-muted">Nothing waiting. All caught up.</p>}
       </div>
     </section>
   );

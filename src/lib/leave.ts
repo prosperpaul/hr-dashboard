@@ -35,18 +35,21 @@ export type LeaveEmployee = {
 };
 
 /*
-  One colour per leave type, used by the calendar chips, legend, queue badges
-  and table. Kept here so every part of the page agrees.
+  One colour per leave type, used by the timeline bars, legend, queue badges
+  and table. Kept here so every part of the page agrees. They use the soft
+  "tint" colours from the design system (always with navy text):
+  Vacation = sky, Sick = rose, Personal = lilac, Unpaid = sand.
+  `dot` is a small swatch (legend / dots), `chip` styles a pill or bar.
   (Full class names are written out so Tailwind can find them.)
 */
 export const LEAVE_TYPE_STYLES: Record<string, { dot: string; chip: string }> = {
-  Vacation: { dot: "bg-accent", chip: "border-accent/30 bg-accent-soft text-accent-hover" },
-  Sick: { dot: "bg-warning", chip: "border-warning/30 bg-warning/10 text-warning" },
-  Personal: { dot: "bg-sky-400", chip: "border-sky-400/30 bg-sky-400/10 text-sky-300" },
-  Unpaid: { dot: "bg-violet-400", chip: "border-violet-400/30 bg-violet-400/10 text-violet-300" },
+  Vacation: { dot: "bg-tint-sky ring-1 ring-inset ring-ink/20", chip: "border-ink/15 bg-tint-sky text-ink" },
+  Sick: { dot: "bg-tint-rose ring-1 ring-inset ring-ink/20", chip: "border-ink/15 bg-tint-rose text-ink" },
+  Personal: { dot: "bg-tint-lilac ring-1 ring-inset ring-ink/20", chip: "border-ink/15 bg-tint-lilac text-ink" },
+  Unpaid: { dot: "bg-tint-sand ring-1 ring-inset ring-ink/20", chip: "border-ink/15 bg-tint-sand text-ink" },
 };
 export const leaveStyle = (type: string) =>
-  LEAVE_TYPE_STYLES[type] ?? { dot: "bg-ink-faint", chip: "border-border bg-surface-2 text-ink-muted" };
+  LEAVE_TYPE_STYLES[type] ?? { dot: "bg-surface-2 ring-1 ring-inset ring-ink/20", chip: "border-border bg-surface-2 text-ink-muted" };
 
 // "Nov 18", "Nov 18–22", "Nov 28 – Dec 2" (dates are local "YYYY-MM-DD").
 export function formatLeaveRange(start: string, end: string): string {

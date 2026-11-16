@@ -4,6 +4,8 @@ import { canManageEmployees } from "@/lib/permissions";
 import { getNotifications } from "@/lib/notifications";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
+import DemoBanner from "@/components/layout/DemoBanner";
+import { isDemoUser } from "@/lib/demo";
 
 /*
   The dashboard "shell": sidebar + top bar wrapped around every
@@ -39,6 +41,7 @@ export default async function DashboardLayout({
     <div className="flex h-screen overflow-hidden bg-bg">
       <Sidebar user={session.user} badges={{ "/leave": pendingLeave }} />
       <div className="flex flex-1 flex-col overflow-hidden">
+        {isDemoUser(session.user.email) && <DemoBanner role={session.user.role} />}
         <Topbar
           canManageEmployees={canManageEmployees(session.user.role)}
           user={session.user}

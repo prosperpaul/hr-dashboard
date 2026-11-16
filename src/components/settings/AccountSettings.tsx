@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { User, KeyRound, ShieldCheck, Building2, CheckCircle2, AlertCircle, Check, X, Eye, EyeOff, Mail, BadgeCheck, Lock } from "lucide-react";
+import { CheckCircle2, AlertCircle, Check, X, Eye, EyeOff, Info, Lock, BadgeCheck } from "lucide-react";
 import { updateMyName, changeMyPassword } from "@/lib/account-actions";
-import { Pill } from "@/components/dashboard/Panel";
+import { deptTint } from "@/lib/dept-tint";
 
 type AccountInfo = {
   name: string;
@@ -15,12 +15,15 @@ type AccountInfo = {
 type Permission = { label: string; detail: string; allowed: boolean };
 type WorkspaceSetting = { label: string; value: string; hint: string };
 
+// The left-hand section list. Each entry jumps to the matching section below.
 const SECTIONS = [
-  { id: "profile", label: "Profile", icon: User },
-  { id: "security", label: "Security", icon: KeyRound },
-  { id: "permissions", label: "Roles & permissions", icon: ShieldCheck },
-  { id: "workspace", label: "Workspace", icon: Building2 },
+  { id: "profile", label: "Profile" },
+  { id: "security", label: "Security" },
+  { id: "permissions", label: "Roles & permissions" },
+  { id: "workspace", label: "Workspace" },
 ];
+
+const capsLabel = "text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted";
 
 const initials = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
@@ -38,6 +41,22 @@ function strength(pw: string): { score: number; label: string } {
   return { score, label: ["", "Weak", "Fair", "Good", "Strong"][score] };
 }
 
+/*
+  A section heading in the mockup's editorial style: title + one-line
+  description on the left, "SECTION 0N" marker on the right.
+*/
+function SectionHead({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-5 flex items-start justify-between gap-4">
+      <div>
+        <h2 className="text-headline-md text-ink">{title}</h2>
+        <p className="mt-1 text-body-sm text-ink-muted">{children}</p>
+      </div>
+      <span className={`shrink-0 pt-2 ${capsLabel}`}>Section {String(n).padStart(2, "0")}</span>
+    </div>
+  );
+}
+
 export default function AccountSettings({
   account,
   permissions,
@@ -50,9 +69,13 @@ export default function AccountSettings({
   const [active, setActive] = useState("profile");
 
   // Profile
+  // `savedName` = the name as last saved, so we know when there are unsaved edits.
+  const [savedName, setSavedName] = useState(account.name);
   const [name, setName] = useState(account.name);
   const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [namePending, startNameTransition] = useTransition();
+  const nameDirty = name.trim() !== savedName;
+  const nameValid = name.trim().length >= 2;
 
   // Password
   const [currentPw, setCurrentPw] = useState("");
@@ -70,6 +93,7 @@ export default function AccountSettings({
     startNameTransition(async () => {
       try {
         await updateMyName(name);
+        setSavedName(name.trim());
         setNameMsg({ ok: true, text: "Name updated. It'll show everywhere after your next sign-in." });
       } catch (err) {
         setNameMsg({ ok: false, text: err instanceof Error ? err.message : "Could not update name." });
@@ -98,35 +122,33 @@ export default function AccountSettings({
   }
 
   const input =
-    "h-10 w-full rounded-lg border border-border bg-surface-2 px-3 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-accent focus:ring-1 focus:ring-accent";
-  const readOnly = "flex h-10 w-full items-center gap-2 rounded-lg border border-border bg-bg/60 px-3 text-body-md text-ink-muted";
-  const label = "mb-1.5 flex items-center justify-between text-label-sm uppercase tracking-wider text-ink-faint";
-  const card = "scroll-mt-6 rounded-xl border border-border bg-surface p-5 sm:p-6";
-  const primaryBtn =
-    "inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-4 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-50";
+    "h-11 w-full rounded-lg border border-border bg-surface px-3 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
+  const readOnly = "flex h-11 w-full items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 text-body-md text-ink-muted";
+  const label = "mb-1.5 flex items-center justify-between text-label-md font-semibold text-ink";
+  const card = "rounded-xl border border-border bg-surface p-5 sm:p-6";
+  const section = "scroll-mt-6 border-b border-border pb-10 last:border-0";
 
+  const department = account.employee?.department ?? null;
   const allowedCount = permissions.filter((p) => p.allowed).length;
+  const memberSince = new Date(account.memberSince).toLocaleDateString("en-US", { month: "short", year: "numeric" });
 
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <section className="space-y-1">
-        <div className="flex items-center gap-2 text-label-sm uppercase tracking-wider text-ink-faint">
-          <span>System</span>
-          <span>/</span>
-          <span className="normal-case tracking-normal text-accent-hover">Settings</span>
-        </div>
-        <h1 className="text-headline-lg text-ink md:text-headline-xl">Settings</h1>
-        <p className="text-body-md text-ink-muted">Manage your profile, password and see what your role can access.</p>
+    <div className="space-y-8 pb-24">
+      {/* ── Editorial header ── */}
+      <section className="space-y-2">
+        <p className={`flex items-center gap-2 ${capsLabel}`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-ink" />
+          System · Preferences &amp; controls
+        </p>
+        <h1 className="text-headline-lg text-ink md:text-headline-xl">Settings.</h1>
+        <p className="text-body-md text-ink-muted">Manage your profile and password, and see what your role can access.</p>
       </section>
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[240px_1fr]">
-        {/* ── Section nav (jumps to each card) ── */}
-        <nav className="rounded-xl border border-border bg-surface p-2 lg:sticky lg:top-4">
-          <p className="px-3 pb-2 pt-2 text-label-sm uppercase tracking-wider text-ink-faint">Account &amp; workspace</p>
+      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[220px_1fr]">
+        {/* ── Section nav (jumps to each section) ── */}
+        <nav className="lg:sticky lg:top-4">
           <ul className="flex gap-1 overflow-x-auto lg:block lg:space-y-0.5">
             {SECTIONS.map((s) => {
-              const Icon = s.icon;
               const on = active === s.id;
               return (
                 <li key={s.id} className="shrink-0">
@@ -134,217 +156,249 @@ export default function AccountSettings({
                     href={`#${s.id}`}
                     onClick={() => setActive(s.id)}
                     className={[
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-label-md transition-colors",
-                      on ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink",
+                      "flex items-center justify-between gap-2 whitespace-nowrap border-l-2 px-3 py-2 text-label-md transition-colors",
+                      on ? "border-accent bg-surface text-ink" : "border-transparent text-ink-muted hover:bg-surface hover:text-ink",
                     ].join(" ")}
                   >
-                    <Icon className={`h-4 w-4 ${on ? "text-accent" : "text-ink-faint"}`} />
-                    <span className="whitespace-nowrap">{s.label}</span>
+                    {s.label}
+                    {on && <span className="hidden h-1.5 w-1.5 rounded-full bg-accent lg:inline" />}
                   </a>
                 </li>
               );
             })}
           </ul>
-          <div className="mt-2 hidden border-t border-border px-3 pb-2 pt-3 lg:block">
-            <p className="text-label-sm uppercase tracking-wider text-ink-faint">Session</p>
-            <p className="mt-1.5 flex items-center gap-2 text-body-sm text-ink-muted">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)]" />
-              Signed in as {account.role}
+          {/* Session note (replaces the mockup's governance note with real info) */}
+          <div className="mt-6 hidden border-t border-border pt-4 lg:block">
+            <p className={capsLabel}>Your session</p>
+            <p className="mt-2 text-body-sm text-ink-muted">
+              Signed in as <span className="text-ink">{account.role}</span>. Member since {memberSince}.
             </p>
           </div>
         </nav>
 
-        <div className="space-y-6">
-          {/* ── Profile ── */}
-          <form id="profile" onSubmit={saveName} className={card}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-headline-md text-ink">Personal Information</h2>
-                <p className="text-body-sm text-ink-faint">How you appear across the dashboard.</p>
-              </div>
-              <Pill tone="accent" dot>
-                Member since {new Date(account.memberSince).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
-              </Pill>
-            </div>
+        <div className="min-w-0 space-y-10">
+          {/* ── 01 Profile ── */}
+          <form id="profile" onSubmit={saveName} className={section}>
+            <SectionHead n={1} title="Personal profile">
+              How you appear across the dashboard.
+            </SectionHead>
 
-            <div className="mt-5 flex items-center gap-4 rounded-lg border border-border bg-bg/50 p-4">
-              <div className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full border border-accent/30 bg-accent-soft text-headline-md text-accent-hover">
-                {initials(name || account.name)}
-                <span className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full border-2 border-surface bg-accent">
-                  <Check className="h-3 w-3 text-on-accent" />
-                </span>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-headline-sm text-ink">{account.name}</p>
-                <p className="truncate text-body-sm text-ink-faint">
-                  {account.employee ? `${account.employee.title}${account.employee.department ? ` · ${account.employee.department}` : ""}` : account.role}
-                </p>
+            <div className={card}>
+              <div className="flex items-center gap-4">
+                <div className={`grid h-16 w-16 shrink-0 place-items-center rounded-full font-display text-headline-sm text-ink ${deptTint(department)}`}>
+                  {initials(name || account.name)}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-label-md font-semibold text-ink">{savedName}</p>
+                  <p className="truncate text-body-sm text-ink-muted">
+                    {account.employee ? `${account.employee.title}${department ? ` · ${department}` : ""}` : account.role}
+                  </p>
+                </div>
               </div>
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="displayName" className={label}>
-                  Display name
+                  Full name
                 </label>
                 <input id="displayName" className={input} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
               </div>
               <div>
                 <p className={label}>
-                  Sign-in email
-                  <span className="flex items-center gap-1 normal-case tracking-normal text-accent-hover">
-                    <BadgeCheck className="h-3 w-3" /> Account email
+                  Work email
+                  <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+                    <BadgeCheck className="h-3 w-3" /> Sign-in
                   </span>
                 </p>
                 <div className={readOnly}>
-                  <Mail className="h-4 w-4 text-ink-faint" />
                   <span className="truncate">{account.email}</span>
                 </div>
               </div>
               <div>
-                <p className={label}>Access role</p>
+                <p className={label}>Role / title</p>
                 <div className={readOnly}>
-                  <ShieldCheck className="h-4 w-4 text-ink-faint" />
-                  {account.role}
+                  <span className="truncate">{account.employee?.title ?? "—"}</span>
+                </div>
+              </div>
+              <div>
+                <p className={label}>Access role</p>
+                <div className={readOnly}>{account.role}</div>
+              </div>
+              <div>
+                <p className={label}>Department</p>
+                <div className={readOnly}>
+                  <span className="truncate">{department ?? "—"}</span>
                 </div>
               </div>
               <div>
                 <p className={label}>Employee record</p>
                 <div className={readOnly}>
-                  <User className="h-4 w-4 text-ink-faint" />
                   <span className="truncate">{account.employee ? account.employee.name : "Not linked"}</span>
                 </div>
               </div>
             </div>
-            <p className="mt-3 flex items-center gap-1.5 text-body-sm text-ink-faint">
-              <Lock className="h-3 w-3" /> Email, role and employee link are managed by an Admin on the User accounts page.
-            </p>
 
+            <p className="mt-4 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2.5 text-body-sm text-ink-muted">
+              <Info className="h-4 w-4 shrink-0" /> Email, role and employee link are managed by an Admin on the User accounts page.
+            </p>
             {nameMsg && <Message {...nameMsg} />}
-            <div className="mt-5 flex justify-end border-t border-border pt-4">
-              <button type="submit" disabled={namePending || name.trim() === account.name || name.trim().length < 2} className={primaryBtn}>
-                <Check className="h-4 w-4" />
-                {namePending ? "Saving…" : "Save changes"}
-              </button>
-            </div>
           </form>
 
-          {/* ── Security ── */}
-          <form id="security" onSubmit={savePassword} className={card}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-headline-md text-ink">Security &amp; Password</h2>
-                <p className="text-body-sm text-ink-faint">Use at least 8 characters. Longer, with a mix of letters, numbers and symbols, is better.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShow((s) => !s)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-label-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
-              >
-                {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                {show ? "Hide" : "Show"} passwords
-              </button>
-            </div>
+          {/* ── 02 Security ── */}
+          <form id="security" onSubmit={savePassword} className={section}>
+            <SectionHead n={2} title="Security & credentials">
+              Change the password you sign in with.
+            </SectionHead>
 
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div>
-                <label htmlFor="currentPw" className={label}>
-                  Current password
-                </label>
-                <input id="currentPw" type={show ? "text" : "password"} autoComplete="current-password" className={input} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
+            <div className={card}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-label-md font-semibold text-ink">Update password</h3>
+                  <p className="text-body-sm text-ink-muted">Use at least 8 characters. Longer, with a mix of letters, numbers and symbols, is better.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShow((s) => !s)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg"
+                >
+                  {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {show ? "Hide" : "Show"} passwords
+                </button>
               </div>
-              <div>
-                <label htmlFor="newPw" className={label}>
-                  New password
-                  {pwStrength.label && (
-                    <span className={`normal-case tracking-normal ${pwStrength.score >= 3 ? "text-accent-hover" : pwStrength.score === 2 ? "text-warning" : "text-critical"}`}>
-                      {pwStrength.label}
-                    </span>
-                  )}
-                </label>
-                <input id="newPw" type={show ? "text" : "password"} autoComplete="new-password" className={input} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" />
-                {/* 4-segment strength meter */}
-                <div className="mt-2 grid grid-cols-4 gap-1" aria-hidden>
-                  {[1, 2, 3, 4].map((i) => (
-                    <span
-                      key={i}
-                      className={`h-1 rounded-full ${
-                        i <= pwStrength.score ? (pwStrength.score >= 3 ? "bg-accent" : pwStrength.score === 2 ? "bg-warning" : "bg-critical") : "bg-surface-2"
-                      }`}
-                    />
-                  ))}
+
+              <div className="mt-5 space-y-4">
+                <div className="sm:max-w-[calc(50%-0.5rem)]">
+                  <label htmlFor="currentPw" className={label}>
+                    Current password
+                  </label>
+                  <input id="currentPw" type={show ? "text" : "password"} autoComplete="current-password" className={input} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="newPw" className={label}>
+                      New password
+                    </label>
+                    <input id="newPw" type={show ? "text" : "password"} autoComplete="new-password" className={input} value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="At least 8 characters" />
+                  </div>
+                  <div>
+                    <label htmlFor="confirmPw" className={label}>
+                      Confirm new password
+                    </label>
+                    <input id="confirmPw" type={show ? "text" : "password"} autoComplete="new-password" className={input} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
+                  </div>
                 </div>
               </div>
-              <div>
-                <label htmlFor="confirmPw" className={label}>
-                  Confirm password
-                </label>
-                <input id="confirmPw" type={show ? "text" : "password"} autoComplete="new-password" className={input} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
-                {confirmPw && (
-                  <p className={`mt-2 flex items-center gap-1 text-body-sm ${matches ? "text-accent-hover" : "text-critical"}`}>
-                    {matches ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                    {matches ? "Passwords match" : "Doesn't match yet"}
-                  </p>
-                )}
-              </div>
-            </div>
 
-            {pwMsg && <Message {...pwMsg} />}
-            <div className="mt-5 flex justify-end border-t border-border pt-4">
-              <button type="submit" disabled={pwPending || !currentPw || newPw.length < 8 || !matches} className={primaryBtn}>
-                <KeyRound className="h-4 w-4" />
-                {pwPending ? "Updating…" : "Update password"}
-              </button>
+              {/* 4-segment strength meter */}
+              <div className="mt-5 grid grid-cols-4 gap-1.5" aria-hidden>
+                {[1, 2, 3, 4].map((i) => (
+                  <span
+                    key={i}
+                    className={`h-1 rounded-full ${
+                      i <= pwStrength.score ? (pwStrength.score >= 3 ? "bg-ink" : pwStrength.score === 2 ? "bg-warning" : "bg-critical") : "bg-surface-2"
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm">
+                  <span className={pwStrength.score >= 3 ? "text-ink" : pwStrength.score === 2 ? "text-warning" : pwStrength.score ? "text-critical" : "text-ink-faint"}>
+                    {pwStrength.label ? `Strength: ${pwStrength.label}` : "Strength: —"}
+                  </span>
+                  {confirmPw && (
+                    <span className={`flex items-center gap-1 ${matches ? "text-good" : "text-critical"}`}>
+                      {matches ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                      {matches ? "Passwords match" : "Doesn't match yet"}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={pwPending || !currentPw || newPw.length < 8 || !matches}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-full bg-navy px-5 text-label-md font-semibold text-on-navy transition-colors hover:bg-navy-2 disabled:opacity-50"
+                >
+                  {pwPending ? "Updating…" : "Update password"}
+                </button>
+              </div>
+              {pwMsg && <Message {...pwMsg} />}
             </div>
           </form>
 
-          {/* ── Roles & permissions ── */}
-          <section id="permissions" className={card}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-headline-md text-ink">Roles &amp; Permissions</h2>
-                <p className="text-body-sm text-ink-faint">What the {account.role} role can do. Everyone can always manage their own leave, attendance and payslips.</p>
-              </div>
-              <Pill tone="accent">
-                {allowedCount} of {permissions.length} enabled
-              </Pill>
-            </div>
-            <ul className="mt-5 divide-y divide-border rounded-lg border border-border">
+          {/* ── 03 Roles & permissions ── */}
+          <section id="permissions" className={section}>
+            <SectionHead n={3} title="Roles & permissions">
+              What the {account.role} role can do ({allowedCount} of {permissions.length}). Everyone can always manage their own leave, attendance and payslips.
+            </SectionHead>
+            <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
               {permissions.map((p) => (
-                <li key={p.label} className="flex items-center justify-between gap-4 px-4 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${p.allowed ? "border-accent/30 bg-accent-soft" : "border-border bg-bg"}`}>
-                      {p.allowed ? <Check className="h-4 w-4 text-accent-hover" /> : <Lock className="h-3.5 w-3.5 text-ink-faint" />}
-                    </span>
-                    <div className="min-w-0">
-                      <p className={`text-label-md ${p.allowed ? "text-ink" : "text-ink-muted"}`}>{p.label}</p>
-                      <p className="truncate text-body-sm text-ink-faint">{p.detail}</p>
-                    </div>
+                <li key={p.label} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0">
+                    <p className={`text-label-md font-semibold ${p.allowed ? "text-ink" : "text-ink-muted"}`}>{p.label}</p>
+                    <p className="text-body-sm text-ink-muted">{p.detail}</p>
                   </div>
-                  <span className={`shrink-0 text-label-sm ${p.allowed ? "text-accent-hover" : "text-ink-faint"}`}>{p.allowed ? "Allowed" : "No access"}</span>
+                  {/* Read-only switch look: filled navy = allowed, empty = no access */}
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className={`hidden text-label-sm sm:inline ${p.allowed ? "text-ink" : "text-ink-faint"}`}>{p.allowed ? "Allowed" : "No access"}</span>
+                    <span
+                      aria-label={p.allowed ? "Allowed" : "No access"}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full ${p.allowed ? "bg-navy" : "border border-border bg-surface-2"}`}
+                    >
+                      <span className={`absolute grid h-4 w-4 place-items-center rounded-full bg-surface ${p.allowed ? "left-6" : "left-1"}`}>
+                        {!p.allowed && <Lock className="h-2.5 w-2.5 text-ink-faint" />}
+                      </span>
+                    </span>
+                  </span>
                 </li>
               ))}
             </ul>
           </section>
 
-          {/* ── Workspace ── */}
-          <section id="workspace" className={card}>
-            <div>
-              <h2 className="text-headline-md text-ink">Workspace</h2>
-              <p className="text-body-sm text-ink-faint">Company-wide rules this dashboard currently uses.</p>
-            </div>
-            <dl className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* ── 04 Workspace ── */}
+          <section id="workspace" className={section}>
+            <SectionHead n={4} title="Workspace">
+              Company-wide rules this dashboard currently uses.
+            </SectionHead>
+            <dl className="divide-y divide-border rounded-xl border border-border bg-surface">
               {workspace.map((w) => (
-                <div key={w.label} className="rounded-lg border border-border bg-bg/50 p-4">
-                  <dt className="text-label-sm uppercase tracking-wider text-ink-faint">{w.label}</dt>
-                  <dd className="mt-1 text-headline-sm text-ink">{w.value}</dd>
-                  <dd className="text-body-sm text-ink-faint">{w.hint}</dd>
+                <div key={w.label} className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0">
+                    <dt className="text-label-md font-semibold text-ink">{w.label}</dt>
+                    <dd className="text-body-sm text-ink-muted">{w.hint}</dd>
+                  </div>
+                  <dd className="shrink-0 font-display text-label-md font-semibold text-ink">{w.value}</dd>
                 </div>
               ))}
             </dl>
           </section>
         </div>
       </div>
+
+      {/* ── Floating "unsaved edits" bar — appears when the name has changed ── */}
+      {nameDirty && (
+        <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-3 rounded-xl bg-navy px-5 py-3 text-on-navy shadow-popover">
+          <p className="flex items-center gap-2 text-body-sm">
+            <span className="h-2 w-2 rounded-full bg-[#f5c518]" />
+            <span className="font-semibold">Unsaved edits</span>
+            <span className="text-on-navy-muted">· Profile name changed</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setName(savedName)} className="h-9 rounded-full px-3 text-label-md text-on-navy-muted transition-colors hover:text-on-navy">
+              Discard
+            </button>
+            {/* `form="profile"` lets this button submit the profile form from outside it */}
+            <button
+              type="submit"
+              form="profile"
+              disabled={namePending || !nameValid}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-4 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" />
+              {namePending ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -355,7 +409,7 @@ function Message({ ok, text }: { ok: boolean; text: string }) {
       role={ok ? "status" : "alert"}
       className={[
         "mt-4 flex items-center gap-2 rounded-lg border px-3 py-2 text-body-sm",
-        ok ? "border-accent/30 bg-accent-soft text-accent-hover" : "border-critical/40 bg-critical/10 text-critical",
+        ok ? "border-good/30 bg-good/10 text-good" : "border-critical/40 bg-critical/10 text-critical",
       ].join(" ")}
     >
       {ok ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}

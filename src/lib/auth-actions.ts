@@ -2,6 +2,7 @@
 
 import { signIn, signOut } from "@/auth";
 import { AuthError } from "next-auth";
+import { DEMO_MODE, DEMO_ACCOUNTS } from "@/lib/demo";
 
 /*
   Server actions for logging in and out. These run ONLY on the server, which
@@ -32,6 +33,23 @@ export async function login(
     }
     throw error; // re-throw the redirect (and anything unexpected)
   }
+}
+
+/*
+  One-click demo sign-in ("Explore as HR", etc.). Only works when demo mode
+  is on, and only for the four known demo accounts — the role comes from the
+  form, but we map it to an email on the SERVER, so a visitor can't use this
+  to sign in as anyone else. The password never reaches the browser.
+*/
+export async function demoLogin(formData: FormData): Promise<void> {
+  if (!DEMO_MODE) throw new Error("Demo sign-in is not available.");
+  const account = DEMO_ACCOUNTS.find((a) => a.role === formData.get("role"));
+  if (!account) throw new Error("Unknown demo role.");
+  await signIn("credentials", {
+    email: account.email,
+    password: process.env.DEMO_PASSWORD || "password123",
+    redirectTo: "/",
+  });
 }
 
 export async function logout() {

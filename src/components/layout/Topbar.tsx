@@ -27,17 +27,17 @@ export default function Topbar({
   badges?: Record<string, number>; // e.g. { "/leave": 3 } — shown on mobile menu tiles
 }) {
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur-xl md:px-8">
+    <header className="sticky top-0 z-10 flex h-16 items-center gap-3 border-b border-border bg-surface px-4 md:px-8">
       {/* Mobile menu button (hidden on desktop, where the sidebar is visible) */}
       <MobileNav user={user} badges={badges} />
 
       {/* Search box (hidden on the smallest screens to keep the header tidy) */}
       <div className="relative hidden w-72 sm:block">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
         <input
           type="text"
           placeholder="Search employees, teams…"
-          className="h-9 w-full rounded-lg border border-border bg-surface-2 pl-8 pr-3 text-body-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+          className="h-10 w-full rounded-full border border-border bg-bg pl-9 pr-4 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink"
         />
       </div>
 
@@ -49,7 +49,7 @@ export default function Topbar({
         {canManageEmployees && (
           <Link
             href="/employees"
-            className="flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-label-md font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed"
+            className="flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 sm:px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add employee</span>
@@ -59,7 +59,7 @@ export default function Topbar({
         <Link
           href="/settings"
           aria-label="Your account"
-          className="grid h-8 w-8 place-items-center rounded-full bg-accent-soft text-label-sm font-semibold text-accent-hover ring-1 ring-accent/25 transition-colors hover:ring-accent/60"
+          className="grid h-9 w-9 place-items-center rounded-full bg-navy text-label-sm font-bold text-on-navy transition-opacity hover:opacity-85"
         >
           {initialsOf(user.name)}
         </Link>

@@ -20,8 +20,8 @@ export default function ComingSoon({
 
       <div className="grid place-items-center rounded-2xl border border-dashed border-border bg-surface/40 py-24 text-center">
         <div className="max-w-sm">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent-soft ring-1 ring-accent/40">
-            <Construction className="h-6 w-6 text-accent" />
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-accent-soft ring-1 ring-ink/40">
+            <Construction className="h-6 w-6 text-accent-ink" />
           </div>
           <p className="mt-4 text-sm font-medium text-ink">This page is coming soon</p>
           <p className="mt-1 text-sm text-ink-muted">

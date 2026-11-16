@@ -90,10 +90,13 @@ function toRow(r: {
 function NotLinked() {
   return (
     <div className="space-y-6">
-      <h1 className="text-headline-lg text-ink md:text-headline-xl">Attendance</h1>
+      <header className="border-b border-border pb-6">
+        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Operations • Attendance</p>
+        <h1 className="text-headline-lg text-ink md:text-headline-xl">Clock in, clock out.</h1>
+      </header>
       <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
         <div className="max-w-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">
+          <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-2">
             <Clock className="h-5 w-5 text-ink-faint" />
           </div>
           <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>

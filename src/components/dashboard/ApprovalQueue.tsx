@@ -2,17 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { setLeaveStatus } from "@/lib/leave-actions";
+import { deptTint } from "@/lib/dept-tint";
 
 export type PendingLeave = {
   id: string;
   name: string;
   initials: string;
-  detail: string; // e.g. "Vacation · 5 days"
+  detail: string; // e.g. "5 days Vacation leave"
+  department: string | null;
   range: string; // e.g. "Nov 18–22"
 };
 
 /*
-  The "Needs Attention" list: pending leave requests with Approve / Decline.
+  The "Needs your attention" list: pending leave requests with Approve / Decline.
 
   The buttons call the SAME server action the Leave page uses
   (setLeaveStatus), which re-checks on the server that you're allowed to
@@ -39,37 +41,45 @@ export default function ApprovalQueue({ requests }: { requests: PendingLeave[] }
   }
 
   if (requests.length === 0) {
-    return <p className="py-6 text-center text-body-md text-ink-muted">You&apos;re all caught up 🎉</p>;
+    return (
+      <p className="rounded-xl border border-border bg-surface px-6 py-10 text-center text-body-md text-ink-muted">
+        You&apos;re all caught up — no requests waiting.
+      </p>
+    );
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {error && <p className="rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-body-sm text-critical">{error}</p>}
 
       {requests.map((r) => (
         <div
           key={r.id}
-          className={`rounded-lg border border-border bg-surface-2 p-2.5 transition-opacity ${busyId === r.id ? "opacity-50" : ""}`}
+          className={`flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 transition-opacity sm:flex-row sm:items-center sm:justify-between ${
+            busyId === r.id ? "opacity-50" : ""
+          }`}
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg text-label-md font-semibold text-accent-hover">
-                {r.initials}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-label-md text-ink">{r.name}</p>
-                <p className="truncate text-body-sm text-ink-faint">{r.detail}</p>
-              </div>
+          <div className="flex min-w-0 items-center gap-4">
+            <div className={`font-display grid h-11 w-11 shrink-0 place-items-center rounded-full text-[15px] font-bold text-ink ${deptTint(r.department)}`}>
+              {r.initials}
             </div>
-            <span className="tnum shrink-0 rounded-md bg-bg px-2 py-0.5 text-label-sm text-ink-muted">{r.range}</span>
+            <div className="min-w-0">
+              <p className="font-display truncate text-[17px] font-semibold text-ink">{r.name}</p>
+              <p className="truncate text-body-md text-ink-muted">
+                {r.detail} · <span className="tnum">{r.range}</span>
+              </p>
+              {r.department && (
+                <p className="mt-0.5 truncate text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">{r.department}</p>
+              )}
+            </div>
           </div>
 
-          <div className="mt-2 flex items-center justify-end gap-2 border-t border-border pt-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               disabled={busyId !== null}
               onClick={() => decide(r.id, "Rejected")}
-              className="rounded-md border border-border bg-surface px-2.5 py-1 text-label-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink disabled:cursor-not-allowed"
+              className="h-9 rounded-full border border-border bg-surface px-4 text-label-md text-ink transition-colors hover:bg-bg disabled:cursor-not-allowed"
             >
               Decline
             </button>
@@ -77,7 +87,7 @@ export default function ApprovalQueue({ requests }: { requests: PendingLeave[] }
               type="button"
               disabled={busyId !== null}
               onClick={() => decide(r.id, "Approved")}
-              className="rounded-md bg-accent px-3 py-1 text-label-sm font-semibold text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)] transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:cursor-not-allowed"
+              className="h-9 rounded-full bg-navy px-4 text-label-md text-on-navy transition-opacity hover:opacity-90 disabled:cursor-not-allowed"
             >
               Approve
             </button>

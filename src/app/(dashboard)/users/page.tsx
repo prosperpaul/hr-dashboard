@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageUsers } from "@/lib/permissions";
+import { isDemoUser, DEMO_ACCOUNTS } from "@/lib/demo";
 import UsersManager from "@/components/users/UsersManager";
 import type { UserRow } from "@/lib/user-actions";
 
@@ -18,10 +19,15 @@ export default async function UsersPage() {
     redirect("/"); // not an Admin → send back to the overview
   }
 
+  // Public demo visitors only see the shared demo logins — never real
+  // accounts (yours included) or their email addresses.
+  const demoViewer = isDemoUser(session?.user?.email);
+
   // Fetch users (with any linked employee's name) and the employee list for
   // the link dropdown, in parallel.
   const [records, employees] = await Promise.all([
     prisma.user.findMany({
+      where: demoViewer ? { email: { in: DEMO_ACCOUNTS.map((a) => a.email) } } : undefined,
       orderBy: { createdAt: "desc" },
       include: { employee: { select: { name: true } } },
     }),

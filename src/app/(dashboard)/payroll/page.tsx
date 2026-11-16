@@ -80,7 +80,10 @@ export default async function PayrollPage() {
 function NotLinked() {
   return (
     <div className="space-y-6">
-      <h1 className="text-headline-lg text-ink md:text-headline-xl">Payroll</h1>
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Payroll · My payslips</p>
+        <h1 className="text-headline-lg text-ink md:text-headline-xl">My payslips.</h1>
+      </div>
       <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
         <div className="max-w-sm">
           <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">

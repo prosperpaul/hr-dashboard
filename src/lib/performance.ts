@@ -41,7 +41,7 @@ export type PerfEmployee = { id: string; name: string; role: string; department:
   year first, then the part of the year (Q1/H1 early … Q4/H2 late).
 */
 export function periodSortKey(period: string): number {
-  const year = Number(period.match(/d{4}/)?.[0] ?? 0);
+  const year = Number(period.match(/\d{4}/)?.[0] ?? 0);
   const part = /Q1/i.test(period) ? 1 : /Q2|H1/i.test(period) ? 2 : /Q3/i.test(period) ? 3 : /Q4|H2/i.test(period) ? 4 : 0;
   return year * 10 + part;
 }

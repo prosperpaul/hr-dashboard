@@ -86,7 +86,7 @@ export default function NotificationBell({ items, now }: { items: Notification[]
     if (list.length === 0) return null;
     return (
       <div>
-        <p className="px-4 pb-1 pt-3 text-label-sm uppercase tracking-wider text-ink-faint">{title}</p>
+        <p className="px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{title}</p>
         <ul>
           {list.map((n) => {
             const Icon = ICONS[n.kind];
@@ -100,7 +100,7 @@ export default function NotificationBell({ items, now }: { items: Notification[]
                 >
                   <span
                     className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${
-                      n.type === "action" ? "border-accent/30 bg-accent-soft text-accent-hover" : "border-border bg-surface text-ink-muted"
+                      n.type === "action" ? "border-accent/30 bg-accent-soft text-accent-ink" : "border-border bg-surface text-ink-muted"
                     }`}
                   >
                     <Icon className="h-4 w-4" />
@@ -145,7 +145,7 @@ export default function NotificationBell({ items, now }: { items: Notification[]
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <h2 className="text-headline-sm text-ink">Notifications</h2>
-              {unread > 0 && <span className="tnum rounded-full bg-accent-soft px-1.5 text-label-sm text-accent-hover">{unread} new</span>}
+              {unread > 0 && <span className="tnum rounded-full bg-accent-soft px-1.5 text-label-sm text-accent-ink">{unread} new</span>}
             </div>
             {unread > 0 && (
               <button
@@ -161,7 +161,7 @@ export default function NotificationBell({ items, now }: { items: Notification[]
             {items.length === 0 ? (
               <div className="px-6 py-10 text-center">
                 <span className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface">
-                  <CheckCheck className="h-5 w-5 text-accent" />
+                  <CheckCheck className="h-5 w-5 text-accent-ink" />
                 </span>
                 <p className="mt-3 text-headline-sm text-ink">You&apos;re all caught up</p>
                 <p className="mt-1 text-body-sm text-ink-faint">Nothing needs your attention right now.</p>

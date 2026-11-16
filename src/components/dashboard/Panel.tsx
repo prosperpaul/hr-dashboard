@@ -1,5 +1,6 @@
 /*
-  A titled container card (Level 1 surface: #111315 + 1px hairline border).
+  A titled content card (white surface + 1px hairline, 6px corners).
+  The header is separated from the body by a hairline rule, like a print column.
   `title`/`subtitle` show at the top, `action` is an optional element on the
   right (e.g. a link), and `children` is whatever goes inside.
 */
@@ -23,9 +24,9 @@ export default function Panel({
   return (
     <section
       id={id}
-      className={`rounded-xl border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong ${className}`}
+      className={`rounded-xl border border-border bg-surface p-5 md:p-6 ${className}`}
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="-mx-5 mb-5 flex items-start justify-between gap-3 border-b border-border px-5 pb-4 md:-mx-6 md:px-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-headline-sm text-ink">{title}</h2>
@@ -48,18 +49,18 @@ export function Pill({
 }: {
   children: React.ReactNode;
   tone?: "accent" | "neutral";
-  dot?: boolean; // glowing status orb
+  dot?: boolean; // small status dot
 }) {
   return (
     <span
       className={[
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-label-sm",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-label-sm",
         tone === "accent"
-          ? "border-accent/25 bg-accent-soft text-accent-hover"
-          : "border-border bg-white/[0.04] text-ink-muted",
+          ? "border-transparent bg-accent-soft text-accent-ink"
+          : "border-border bg-surface-2 text-ink-muted",
       ].join(" ")}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_8px_var(--color-accent)]" />}
+      {dot && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
       {children}
     </span>
   );

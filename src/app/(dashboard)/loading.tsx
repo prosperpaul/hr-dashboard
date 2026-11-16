@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 export default function DashboardLoading() {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
-      <Loader2 className="h-8 w-8 animate-spin text-accent" />
+      <Loader2 className="h-8 w-8 animate-spin text-accent-ink" />
       <p className="text-sm text-ink-muted">Loading…</p>
     </div>
   );

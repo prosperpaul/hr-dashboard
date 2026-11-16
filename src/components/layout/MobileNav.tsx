@@ -76,11 +76,11 @@ export default function MobileNav({ user, badges = {} }: { user: NavUser; badges
         onClick={() => setOpen(true)}
         aria-label="Open menu"
         aria-expanded={open}
-        className="group grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors hover:bg-surface-2 lg:hidden"
+        className="group grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border transition-colors hover:bg-bg lg:hidden"
       >
         <span className="flex w-5 flex-col items-start gap-[5px]" aria-hidden>
           <span className="h-[2px] w-5 rounded-full bg-ink transition-all duration-300" />
-          <span className="h-[2px] w-3.5 rounded-full bg-accent transition-all duration-300 group-hover:w-5" />
+          <span className="h-[2px] w-3.5 rounded-full bg-ink transition-all duration-300 group-hover:w-5" />
           <span className="h-[2px] w-2.5 rounded-full bg-ink-muted transition-all duration-300 group-hover:w-5" />
         </span>
       </button>
@@ -90,7 +90,7 @@ export default function MobileNav({ user, badges = {} }: { user: NavUser; badges
           <div className="fixed inset-0 z-50 lg:hidden">
             {/* Backdrop */}
             <div
-              className={`absolute inset-0 bg-bg/70 backdrop-blur-md ${
+              className={`absolute inset-0 bg-navy/45 ${
                 closing ? "motion-safe:animate-[fade-out_220ms_ease-in_forwards]" : "motion-safe:animate-[fade-in_250ms_ease-out]"
               }`}
               onClick={close}
@@ -101,44 +101,41 @@ export default function MobileNav({ user, badges = {} }: { user: NavUser; badges
               role="dialog"
               aria-modal="true"
               aria-label="Main menu"
-              className={`absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col overflow-hidden rounded-r-2xl border-r border-border-strong bg-surface shadow-modal ${
+              className={`absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col overflow-hidden border-r border-border bg-surface shadow-modal ${
                 closing
                   ? "motion-safe:animate-[drawer-out_220ms_cubic-bezier(0.4,0,1,1)_forwards]"
                   : "motion-safe:animate-[drawer-in_420ms_cubic-bezier(0.22,1,0.36,1)]"
               }`}
             >
-              {/* Soft emerald glow behind the header */}
-              <div className="pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-accent/20 blur-3xl" />
-
               {/* Brand + close */}
-              <div className="relative flex h-14 shrink-0 items-center justify-between px-4">
+              <div className="relative flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="grid h-7 w-7 place-items-center rounded-md bg-accent shadow-[inset_0_1px_0_rgb(255_255_255/0.2)]">
-                    <Users className="h-4 w-4 text-on-accent" />
+                  <div className="grid h-9 w-9 place-items-center rounded-full bg-accent">
+                    <Users className="h-[18px] w-[18px] text-on-accent" />
                   </div>
-                  <p className="text-label-md text-ink">HR Dashboard</p>
+                  <p className="font-display text-[17px] font-bold tracking-tight text-ink">HR Dashboard</p>
                 </div>
                 <button
                   type="button"
                   onClick={close}
                   aria-label="Close menu"
                   autoFocus
-                  className="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2/80 text-ink-muted transition-all hover:rotate-90 hover:text-ink"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-border text-ink-muted transition-colors hover:bg-bg hover:text-ink"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
               {/* Profile card + quick actions */}
-              <div className="relative mx-4 rounded-2xl border border-border bg-gradient-to-br from-accent/15 via-surface-2 to-surface-2 p-4">
+              <div className="relative mx-4 mt-4 rounded-xl bg-navy p-4 text-on-navy">
                 <div className="flex items-center gap-3">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-accent/40 bg-accent-soft text-headline-sm text-accent-hover shadow-[0_0_24px_-6px_var(--color-accent)]">
+                  <div className="font-display grid h-12 w-12 shrink-0 place-items-center rounded-full bg-accent text-[17px] font-bold text-on-accent">
                     {initialsOf(user.name)}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-headline-sm text-ink">{user.name ?? "User"}</p>
-                    <p className="flex items-center gap-1.5 truncate text-body-sm text-ink-faint">
-                      <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_6px_var(--color-accent)]" />
+                    <p className="font-display truncate text-[17px] font-semibold text-on-navy">{user.name ?? "User"}</p>
+                    <p className="flex items-center gap-1.5 truncate text-body-sm text-on-navy-muted">
+                      <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                       {user.role ?? "Member"}
                     </p>
                   </div>
@@ -147,19 +144,19 @@ export default function MobileNav({ user, badges = {} }: { user: NavUser; badges
                   <Link
                     href="/settings"
                     onClick={close}
-                    className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface/70 py-2 text-label-sm text-ink-muted transition-colors hover:text-ink"
+                    className="flex flex-col items-center gap-1 rounded-lg border border-navy-line py-2 text-label-sm text-on-navy-muted transition-colors hover:bg-navy-2 hover:text-on-navy"
                   >
                     <Settings className="h-4 w-4" />
                     Settings
                   </Link>
-                  <div className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface/70 pb-2 text-label-sm text-ink-muted">
-                    <ThemeToggle className="h-7 w-7 hover:bg-transparent" />
+                  <div className="flex flex-col items-center gap-1 rounded-lg border border-navy-line pb-2 text-label-sm text-on-navy-muted">
+                    <ThemeToggle className="h-7 w-7 text-on-navy-muted hover:bg-transparent hover:text-on-navy" />
                     <span className="-mt-1">Theme</span>
                   </div>
                   <form action={logout} className="contents">
                     <button
                       type="submit"
-                      className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface/70 py-2 text-label-sm text-ink-muted transition-colors hover:border-critical/40 hover:text-critical"
+                      className="flex flex-col items-center gap-1 rounded-lg border border-navy-line py-2 text-label-sm text-on-navy-muted transition-colors hover:bg-navy-2 hover:text-on-navy"
                     >
                       <LogOut className="h-4 w-4" />
                       Sign out
@@ -175,7 +172,7 @@ export default function MobileNav({ user, badges = {} }: { user: NavUser; badges
                   if (items.length === 0) return null;
                   return (
                     <div key={section.heading}>
-                      <p className="mb-2 px-1 text-label-sm uppercase tracking-wider text-ink-faint">{section.heading}</p>
+                      <p className="mb-2 px-1 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{section.heading}</p>
                       <ul className="grid grid-cols-3 gap-2">
                         {items.map((item) => {
                           const active = pathname === item.href;
@@ -193,22 +190,22 @@ export default function MobileNav({ user, badges = {} }: { user: NavUser; badges
                                 onClick={close}
                                 aria-current={active ? "page" : undefined}
                                 className={[
-                                  "relative flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border p-2 text-center transition-all active:scale-95",
+                                  "relative flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border p-2 text-center transition-colors active:scale-95",
                                   active
-                                    ? "border-accent/50 bg-accent-soft shadow-[0_0_24px_-8px_var(--color-accent)]"
-                                    : "border-border bg-surface-2 hover:border-border-strong",
+                                    ? "border-accent bg-accent"
+                                    : "border-border bg-surface hover:bg-bg",
                                 ].join(" ")}
                               >
                                 <span
-                                  className={`grid h-9 w-9 place-items-center rounded-xl ${
-                                    active ? "bg-accent text-on-accent" : "bg-bg/60 text-ink-muted"
+                                  className={`grid h-9 w-9 place-items-center rounded-full ${
+                                    active ? "bg-navy text-on-navy" : "bg-bg text-ink"
                                   }`}
                                 >
                                   <Icon className="h-[18px] w-[18px]" />
                                 </span>
-                                <span className={`text-label-sm leading-tight ${active ? "text-ink" : "text-ink-muted"}`}>{item.label}</span>
+                                <span className={`text-label-sm leading-tight ${active ? "text-on-accent" : "text-ink-muted"}`}>{item.label}</span>
                                 {badge > 0 && (
-                                  <span className="tnum absolute right-1.5 top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-on-accent">
+                                  <span className="tnum absolute right-1.5 top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-navy px-1 text-[10px] font-semibold text-on-navy">
                                     {badge}
                                   </span>
                                 )}
