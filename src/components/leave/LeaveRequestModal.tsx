@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
 import { LEAVE_TYPES, dayCount, type LeaveInput } from "@/lib/leave";
+import BottomSheet from "@/components/ui/BottomSheet";
+import { Field, FieldGrid, FormError, inputClass, textareaClass } from "@/components/ui/form";
+import { buttonClass } from "@/components/ui/button";
 
 type EmployeeOption = { id: string; name: string };
 
@@ -14,6 +16,16 @@ const emptyForm = {
   reason: "",
 };
 
+const FORM_ID = "leave-request-form";
+
+/*
+  The "Request leave" form. It lives in a BottomSheet: a panel that slides
+  up from the bottom on phones and a centred dialog from md up. The sheet
+  handles Escape, focus and scroll-lock for us.
+
+  The Cancel / Submit buttons sit in the sheet's sticky footer, which is
+  rendered outside the <form>, so Submit points back at it with form={FORM_ID}.
+*/
 export default function LeaveRequestModal({
   open,
   employees,
@@ -43,15 +55,6 @@ export default function LeaveRequestModal({
       setError("");
     }
   }
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
 
   function update(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -83,127 +86,76 @@ export default function LeaveRequestModal({
     });
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-bg px-3 py-2 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
-
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-navy/45" onClick={onClose} />
-
-      <div role="dialog" aria-modal="true" className="relative flex h-full w-full max-w-md flex-col border-l border-border bg-surface shadow-modal">
-        <div className="flex items-center justify-between border-b border-border px-5 h-16">
-          <h2 className="font-display text-headline-sm text-ink">
-            {fixedEmployeeId ? "Request leave" : "New leave request"}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors hover:bg-bg hover:text-ink"
-          >
-            <X className="h-4 w-4" />
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={fixedEmployeeId ? "Request leave" : "New leave request"}
+      footer={
+        <>
+          {/* Phones: two equal full-width buttons. md+: right-aligned, natural width. */}
+          <button type="button" onClick={onClose} className={`${buttonClass("secondary")} flex-1 md:ml-auto md:flex-none`}>
+            Cancel
           </button>
-        </div>
+          <button type="submit" form={FORM_ID} className={`${buttonClass("primary")} flex-1 md:flex-none`}>
+            Submit request
+          </button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="space-y-4">
+        {/* Employee picker — hidden in self-service (it's always you) */}
+        {!fixedEmployeeId && (
+          <Field label="Employee" required>
+            <select className={inputClass} value={form.employeeId} onChange={(e) => update("employeeId", e.target.value)}>
+              {employees.length === 0 && <option value="">No employees</option>}
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex-1 space-y-4 p-5">
-            {/* Employee picker — hidden in self-service (it's always you) */}
-            {!fixedEmployeeId && (
-              <Field label="Employee">
-                <select
-                  className={inputClass}
-                  value={form.employeeId}
-                  onChange={(e) => update("employeeId", e.target.value)}
-                >
-                  {employees.length === 0 && <option value="">No employees</option>}
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>{emp.name}</option>
-                  ))}
-                </select>
-              </Field>
-            )}
+        <Field label="Type" required>
+          <select className={inputClass} value={form.type} onChange={(e) => update("type", e.target.value)}>
+            {LEAVE_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-            <Field label="Type">
-              <select
-                className={inputClass}
-                value={form.type}
-                onChange={(e) => update("type", e.target.value)}
-              >
-                {LEAVE_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </Field>
+        {/* One date per line on phones, side by side from sm up */}
+        <FieldGrid>
+          <Field label="Start date" required>
+            <input type="date" autoComplete="off" className={inputClass} value={form.startDate} onChange={(e) => update("startDate", e.target.value)} />
+          </Field>
+          <Field label="End date" required>
+            <input
+              type="date"
+              autoComplete="off"
+              className={inputClass}
+              value={form.endDate}
+              min={form.startDate || undefined}
+              onChange={(e) => update("endDate", e.target.value)}
+            />
+          </Field>
+        </FieldGrid>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Start date">
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={form.startDate}
-                  onChange={(e) => update("startDate", e.target.value)}
-                />
-              </Field>
-              <Field label="End date">
-                <input
-                  type="date"
-                  className={inputClass}
-                  value={form.endDate}
-                  onChange={(e) => update("endDate", e.target.value)}
-                />
-              </Field>
-            </div>
+        {/* Live day-count preview */}
+        <p className="text-body-md text-ink-muted" aria-live="polite">
+          Duration: <span className="tnum font-medium text-ink">{days > 0 ? `${days} day${days === 1 ? "" : "s"}` : "—"}</span>
+        </p>
 
-            {/* Live day-count preview */}
-            <p className="text-body-md text-ink-muted">
-              Duration:{" "}
-              <span className="font-medium text-ink">
-                {days > 0 ? `${days} day${days === 1 ? "" : "s"}` : "—"}
-              </span>
-            </p>
+        <Field label="Reason (optional)">
+          <textarea className={`${textareaClass} resize-y`} value={form.reason} onChange={(e) => update("reason", e.target.value)} placeholder="Add a note…" />
+        </Field>
 
-            <Field label="Reason (optional)">
-              <textarea
-                className={`${inputClass} min-h-20 resize-y`}
-                value={form.reason}
-                onChange={(e) => update("reason", e.target.value)}
-                placeholder="Add a note…"
-              />
-            </Field>
-
-            {error && (
-              <p role="alert" className="rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 border-t border-border p-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="h-10 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
-            >
-              Submit request
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
-      {children}
-    </label>
+        {error && <FormError>{error}</FormError>}
+      </form>
+    </BottomSheet>
   );
 }

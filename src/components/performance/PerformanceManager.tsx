@@ -2,12 +2,24 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Send, Undo2, Search, Download, Award, Check, Lock, Star, ChevronDown, Workflow, CircleCheck, Clock } from "lucide-react";
+import { Plus, Pencil, Trash2, Send, Undo2, Search, Download, Award, Check, Lock, Star, ChevronDown, Workflow, CircleCheck, Clock, type LucideIcon } from "lucide-react";
 import { ratingLabel, periodSortKey, type ReviewRow, type ReviewInput, type PerfEmployee } from "@/lib/performance";
 import { createReview, updateReview, setReviewStatus, deleteReview } from "@/lib/performance-actions";
 import { deptBadgeClass } from "@/lib/dept-tint";
 import ReviewFormModal from "./ReviewFormModal";
 import Avatar from "./Avatar";
+import Stars from "./Stars";
+import ResponsiveList from "@/components/ui/ResponsiveList";
+import ListRow from "@/components/ui/ListRow";
+import FilterBar from "@/components/ui/FilterBar";
+import BottomSheet from "@/components/ui/BottomSheet";
+import EmptyState from "@/components/ui/EmptyState";
+import StatusText, { type StatusTone } from "@/components/ui/StatusText";
+import { buttonClass } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/form";
+import ConfirmSheet, { type Confirmation } from "@/components/employees/ConfirmSheet";
+import { ChipTabs } from "@/components/ui/Chips";
+import Fab from "@/components/ui/Fab";
 
 // Roster status for one employee in the chosen cycle.
 type RosterStatus = "Not started" | "Draft" | "Submitted" | "Acknowledged";
@@ -40,12 +52,21 @@ const RATING_TILE: Record<number, string> = {
   0: "bg-surface-2 border-border",
 };
 
-const STATUS_STYLE: Record<RosterStatus, { pill: string; dot: string; label: string }> = {
-  Acknowledged: { pill: "bg-good/15 text-good", dot: "bg-good", label: "Acknowledged" },
-  Submitted: { pill: "bg-tint-sky text-ink", dot: "bg-navy", label: "Shared" },
-  Draft: { pill: "bg-surface-2 text-ink-muted", dot: "bg-ink-faint", label: "Draft" },
-  "Not started": { pill: "bg-warning/15 text-warning", dot: "bg-warning", label: "Not started" },
+// `tone` + `icon` are the phone list's StatusText (icon + colour + words);
+// `pill` + `dot` are the desktop table's badge.
+const STATUS_STYLE: Record<RosterStatus, { pill: string; dot: string; label: string; tone: StatusTone; icon?: LucideIcon }> = {
+  Acknowledged: { pill: "bg-good/15 text-good", dot: "bg-good", label: "Acknowledged", tone: "good" },
+  Submitted: { pill: "bg-tint-sky text-ink", dot: "bg-navy", label: "Shared", tone: "pending", icon: Send },
+  Draft: { pill: "bg-surface-2 text-ink-muted", dot: "bg-ink-faint", label: "Draft", tone: "neutral", icon: Pencil },
+  "Not started": { pill: "bg-warning/15 text-warning", dot: "bg-warning", label: "Not started", tone: "warning", icon: Clock },
 };
+
+// Small controls in the desktop table: 32px to look at, but an invisible
+// 48px hit area below lg (tablets are touch screens too).
+const HIT = "relative before:absolute before:-inset-2 before:content-[''] lg:before:hidden";
+
+const pagerButton =
+  "inline-flex min-h-tap flex-1 items-center justify-center rounded-full border border-border bg-surface px-4 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-40 md:flex-none md:px-3 lg:h-8 lg:min-h-0";
 
 const avg = (ns: number[]) => (ns.length ? ns.reduce((s, n) => s + n, 0) / ns.length : 0);
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -71,6 +92,8 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(8);
   const [modal, setModal] = useState<{ editing: ReviewRow | null; employeeId?: string } | null>(null);
+  const [actionsFor, setActionsFor] = useState<RosterRow | null>(null); // phone: the row whose actions sheet is open
+  const [confirm, setConfirm] = useState<Confirmation | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // ── This cycle ────────────────────────────────────────────────────
@@ -190,7 +213,13 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
   };
   const share = (r: ReviewRow, status: "Submitted" | "Draft") => run(() => setReviewStatus(r.id, status));
   function remove(r: ReviewRow) {
-    if (window.confirm(`Delete ${r.employeeName}'s ${r.period} review?`)) run(() => deleteReview(r.id));
+    setConfirm({
+      title: "Delete this review?",
+      message: `${r.employeeName}'s ${r.period} review will be permanently deleted.`,
+      confirmLabel: "Delete review",
+      danger: true,
+      onConfirm: () => run(() => deleteReview(r.id)),
+    });
   }
 
   function exportCsv() {
@@ -218,15 +247,24 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
     URL.revokeObjectURL(url);
   }
 
-  const control =
-    "h-9 rounded-full border border-border bg-surface px-3 text-label-md text-ink outline-none transition-colors hover:bg-bg focus:border-ink";
+  // Filters that live in the phone "Filters" sheet (search stays visible).
+  const sheetFilterCount = (dept !== "all" ? 1 : 0) + (ratingFilter !== "all" ? 1 : 0) + (sort !== "rating-desc" ? 1 : 0);
+  function resetSheetFilters() {
+    setDept("all");
+    setRatingFilter("all");
+    setSort("rating-desc");
+    resetPage();
+  }
+  // Desktop keeps the compact 36px pill selects; phones/tablets get 48px fields.
+  const control = `${inputClass} rounded-full md:w-auto lg:h-9 lg:min-h-0 lg:px-3 lg:text-label-md`;
 
   return (
-    <div className="space-y-6">
+    // Extra bottom room below lg so the floating "New review" button never covers the pager.
+    <div className="space-y-6 pb-20 lg:pb-0">
       {/* ── Header ── */}
       <section className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div className="min-w-0 space-y-2">
-          <p className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+          <p className="flex flex-wrap items-center gap-2 text-eyebrow uppercase text-ink-muted">
             <span>{period ? `Cycle ${period}` : "Performance"}</span>
             <span className="h-1 w-1 rounded-full bg-ink-faint" />
             <span className="tnum">
@@ -249,7 +287,9 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {/* Phones: cycle picker and Export stack full width. "New review" is the
+            floating yellow button (Fab) below lg, so it only shows here on desktop. */}
+        <div className="grid shrink-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
           {periods.length > 0 && (
             <label className="relative">
               <span className="sr-only">Review cycle</span>
@@ -259,7 +299,7 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                   setPeriod(e.target.value);
                   resetPage();
                 }}
-                className="h-10 appearance-none rounded-full border border-border bg-surface pl-4 pr-9 text-label-md text-ink outline-none transition-colors hover:bg-bg focus:border-ink"
+                className="min-h-tap w-full appearance-none rounded-full border border-border bg-surface pl-4 pr-9 text-label-md text-ink outline-none transition-colors hover:bg-bg focus:border-ink sm:w-auto lg:h-10 lg:min-h-0"
               >
                 {[...periods].reverse().map((p) => (
                   <option key={p} value={p}>
@@ -267,30 +307,22 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
             </label>
           )}
-          <button
-            onClick={exportCsv}
-            disabled={!period}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
+          <button onClick={exportCsv} disabled={!period} className={buttonClass("secondary")}>
+            <Download className="h-4 w-4" aria-hidden />
             Export cycle report
           </button>
-          <button
-            onClick={() => setModal({ editing: null })}
-            disabled={isPending || employees.length === 0}
-            className="inline-flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
-          >
-            <Plus className="h-4 w-4" />
+          <button onClick={() => setModal({ editing: null })} disabled={isPending || employees.length === 0} className={`${buttonClass("primary")} max-lg:hidden`}>
+            <Plus className="h-4 w-4" aria-hidden />
             New review
           </button>
         </div>
       </section>
 
       {/* ── Review pipeline ── */}
-      <section className="rounded-xl border border-border bg-surface p-5 md:p-6">
+      <section className="rounded-xl border border-border bg-surface p-4 md:p-6">
         <div className="flex flex-col justify-between gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
           <div className="flex items-start gap-3">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-navy text-on-navy">
@@ -324,7 +356,7 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                 ].join(" ")}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+                  <p className="text-eyebrow uppercase text-ink-muted">
                     Step 0{i + 1}
                     {isCurrent ? " · Current" : ""}
                   </p>
@@ -345,7 +377,7 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                 <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-bg">
                   <div className={`h-full rounded-full ${isCurrent ? "bg-accent" : "bg-navy"}`} style={{ width: `${pct}%` }} />
                 </div>
-                <p className="tnum mt-2 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{pct}% of team</p>
+                <p className="tnum mt-2 text-eyebrow uppercase text-ink-muted">{pct}% of team</p>
               </div>
             );
           })}
@@ -353,7 +385,7 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
       </section>
 
       {/* ── Talent by rating ── */}
-      <section className="rounded-xl border border-border bg-surface p-5 md:p-6">
+      <section className="rounded-xl border border-border bg-surface p-4 md:p-6">
         <div className="flex flex-col justify-between gap-2 border-b border-border pb-4 sm:flex-row sm:items-end">
           <div>
             <div className="flex items-center gap-2">
@@ -374,7 +406,8 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Two tiles per row even on phones: six full-width tiles would be a long scroll. */}
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
           {tiles.map(({ n, people }) => {
             const active = n === 0 ? tab === "Not started" : ratingFilter === String(n);
             return (
@@ -382,17 +415,17 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                 key={n}
                 onClick={() => pickTile(n)}
                 className={[
-                  "relative flex min-h-32 flex-col justify-between overflow-hidden rounded-xl border p-4 text-left transition-colors hover:border-ink/40",
+                  "relative flex min-h-32 min-w-0 flex-col justify-between overflow-hidden rounded-xl border p-3 text-left sm:p-4 transition-colors hover:border-ink/40",
                   RATING_TILE[n],
                   active ? "ring-2 ring-ink" : "",
                 ].join(" ")}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink">
-                    {n === 5 && <Star className="h-3.5 w-3.5 fill-accent text-accent-ink" />}
+                  <p className="flex min-w-0 items-center gap-1.5 text-eyebrow uppercase text-ink">
+                    {n === 5 && <Star className="h-3.5 w-3.5 shrink-0 fill-accent text-accent-ink" aria-hidden />}
                     {n === 0 ? "Not rated yet" : ratingLabel(n)}
                   </p>
-                  <span className={`tnum rounded-full px-2 py-0.5 text-label-sm font-bold ${n === 5 ? "bg-accent text-on-accent" : "bg-surface text-ink"}`}>
+                  <span className={`tnum shrink-0 rounded-full px-2 py-0.5 text-label-sm font-bold ${n === 5 ? "bg-accent text-on-accent" : "bg-surface text-ink"}`}>
                     {people.length}
                   </span>
                 </div>
@@ -409,7 +442,7 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                   )}
                   {people.length === 0 && <span className="text-body-sm text-ink-muted">Nobody</span>}
                 </div>
-                <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
+                <p className="mt-3 text-eyebrow uppercase text-ink-muted">
                   {n === 0 ? "No review this cycle" : `Rated ${n} of 5`}
                 </p>
               </button>
@@ -420,14 +453,26 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
 
       {/* ── Roster + right rail ── */}
       <section className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-        <div id="roster" className="min-w-0 scroll-mt-24 overflow-hidden rounded-xl border border-border bg-surface xl:col-span-8">
+        <div id="roster" className="min-w-0 overflow-hidden rounded-xl border border-border bg-surface xl:col-span-8">
           <div className="flex flex-col gap-3 border-b border-border p-4 md:p-5">
             <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-headline-sm text-ink">Review roster</h2>
                 <p className="text-body-sm text-ink-muted">Each person&apos;s review status and rating for this cycle</p>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5" role="tablist">
+              {/* Phones/tablets: the shared swipeable chip row (navy when chosen,
+                  48px tap area). Desktop keeps its compact navy pills. */}
+              <ChipTabs
+                label="Filter by review status"
+                className="lg:hidden"
+                options={TABS.map((t) => ({ key: t.key, label: t.label, count: tabCount(t.key) }))}
+                value={tab}
+                onChange={(k) => {
+                  setTab(k as (typeof TABS)[number]["key"]);
+                  resetPage();
+                }}
+              />
+              <div className="hidden flex-wrap items-center gap-1.5 lg:flex" role="tablist" aria-label="Review status">
                 {TABS.map((t) => (
                   <button
                     key={t.key}
@@ -449,19 +494,28 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <div className="relative min-w-48 flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                <input
-                  value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    resetPage();
-                  }}
-                  placeholder="Filter by name, role or reviewer…"
-                  className="h-9 w-full rounded-full border border-border bg-surface pl-9 pr-3 text-body-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-ink"
-                />
-              </div>
+            <FilterBar
+              activeCount={sheetFilterCount}
+              onReset={resetSheetFilters}
+              search={
+                <div className="relative w-full md:min-w-56">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
+                  <input
+                    type="search"
+                    autoComplete="off"
+                    enterKeyHint="search"
+                    aria-label="Filter the roster"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value);
+                      resetPage();
+                    }}
+                    placeholder="Filter by name, role or reviewer…"
+                    className={`${control} pl-9 lg:pl-9`}
+                  />
+                </div>
+              }
+            >
               <select aria-label="Department" value={dept} onChange={(e) => { setDept(e.target.value); resetPage(); }} className={control}>
                 <option value="all">All departments</option>
                 {departments.map((d) => (
@@ -483,119 +537,150 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                 <option value="rating-asc">Rating: low first</option>
                 <option value="name">Name</option>
               </select>
-            </div>
+            </FilterBar>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-body-md">
-              <thead>
-                <tr className="border-b border-border bg-bg text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
-                  <th className="px-4 py-3">Employee</th>
-                  <th className="hidden px-3 py-3 lg:table-cell">Department</th>
-                  <th className="hidden px-3 py-3 md:table-cell">Reviewer</th>
-                  <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Rating</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map(({ emp, review, status }) => {
+          {/* md+: a table. Phones: one row per person (avatar, name, department +
+              rating word, stars, status); tapping a row opens its actions sheet. */}
+          <ResponsiveList<RosterRow>
+            inset
+            caption="Review roster"
+            rows={visible}
+            getKey={(r) => r.emp.id}
+            listClassName="px-4"
+            empty={
+              <EmptyState
+                icon={Award}
+                title={periods.length ? "Nobody matches" : "No reviews yet"}
+                description={periods.length ? "Try another tab or filter." : "Tap “New review” to start your first cycle."}
+              />
+            }
+            columns={[
+              {
+                key: "employee",
+                header: "Employee",
+                cell: ({ emp }) => (
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Avatar name={emp.name} department={emp.department} size={32} />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-ink">{emp.name}</p>
+                      <p className="truncate text-body-sm text-ink-muted">{emp.role}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: "department",
+                header: "Department",
+                className: "hidden lg:table-cell",
+                headerClassName: "hidden lg:table-cell",
+                cell: ({ emp }) =>
+                  emp.department ? <span className={deptBadgeClass(emp.department)}>{emp.department}</span> : <span className="text-ink-faint">—</span>,
+              },
+              {
+                key: "reviewer",
+                header: "Reviewer",
+                cell: ({ review }) =>
+                  review ? (
+                    <span className="flex min-w-0 items-center gap-2 text-body-sm text-ink">
+                      <Avatar name={review.reviewerName} department={null} size={22} />
+                      <span className="truncate">{review.reviewerName}</span>
+                    </span>
+                  ) : (
+                    <span className="text-ink-faint">—</span>
+                  ),
+              },
+              {
+                key: "status",
+                header: "Status",
+                cell: ({ status }) => {
                   const st = STATUS_STYLE[status];
                   return (
-                    <tr key={emp.id} className="h-14 border-b border-border last:border-0 hover:bg-bg">
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <Avatar name={emp.name} department={emp.department} size={32} />
-                          <div className="min-w-0">
-                            <p className="truncate font-semibold text-ink">{emp.name}</p>
-                            <p className="truncate text-body-sm text-ink-muted">{emp.role}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="hidden px-3 py-2.5 lg:table-cell">
-                        {emp.department ? <span className={deptBadgeClass(emp.department)}>{emp.department}</span> : <span className="text-ink-faint">—</span>}
-                      </td>
-                      <td className="hidden px-3 py-2.5 md:table-cell">
-                        {review ? (
-                          <span className="flex items-center gap-2 text-body-sm text-ink">
-                            <Avatar name={review.reviewerName} department={null} size={22} />
-                            <span className="truncate">{review.reviewerName}</span>
-                          </span>
-                        ) : (
-                          <span className="text-ink-faint">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-label-sm font-semibold ${st.pill}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
-                          {st.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {review ? (
-                          <div className="flex items-center gap-2" title={ratingLabel(review.rating)}>
-                            <span className="tnum w-7 font-bold text-ink">{review.rating}.0</span>
-                            <span className="hidden h-1.5 w-14 overflow-hidden rounded-full bg-surface-2 sm:block">
-                              <span className={`block h-full rounded-full ${RATING_BAR[review.rating] ?? "bg-navy"}`} style={{ width: `${(review.rating / 5) * 100}%` }} />
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-ink-faint">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1">
-                          {!review ? (
-                            <button
-                              onClick={() => setModal({ editing: null, employeeId: emp.id })}
-                              disabled={isPending}
-                              className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-50"
-                            >
-                              <Plus className="h-3.5 w-3.5" /> Start review
-                            </button>
-                          ) : (
-                            <>
-                              {review.status === "Draft" && (
-                                <IconBtn label="Share with employee" onClick={() => share(review, "Submitted")} disabled={isPending} tone="accent">
-                                  <Send className="h-3.5 w-3.5" />
-                                </IconBtn>
-                              )}
-                              {review.status === "Submitted" && (
-                                <IconBtn label="Move back to draft" onClick={() => share(review, "Draft")} disabled={isPending}>
-                                  <Undo2 className="h-3.5 w-3.5" />
-                                </IconBtn>
-                              )}
-                              <IconBtn label="Edit review" onClick={() => setModal({ editing: review })} disabled={isPending}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </IconBtn>
-                              <IconBtn label="Delete review" onClick={() => remove(review)} disabled={isPending} tone="danger">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </IconBtn>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-label-sm font-semibold ${st.pill}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} aria-hidden />
+                      {st.label}
+                    </span>
                   );
-                })}
-              </tbody>
-            </table>
-
-            {visible.length === 0 && (
-              <div className="grid place-items-center py-14 text-center">
-                <div>
-                  <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-accent-soft">
-                    <Award className="h-5 w-5 text-accent-ink" />
+                },
+              },
+              {
+                key: "rating",
+                header: "Rating",
+                cell: ({ review }) =>
+                  review ? (
+                    <div className="flex items-center gap-2" title={ratingLabel(review.rating)}>
+                      <span className="tnum w-7 font-bold text-ink">{review.rating}.0</span>
+                      <span className="sr-only">{ratingLabel(review.rating)}</span>
+                      <span aria-hidden className="h-1.5 w-14 overflow-hidden rounded-full bg-surface-2">
+                        <span className={`block h-full rounded-full ${RATING_BAR[review.rating] ?? "bg-navy"}`} style={{ width: `${(review.rating / 5) * 100}%` }} />
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-ink-faint">—</span>
+                  ),
+              },
+              {
+                key: "actions",
+                header: "Actions",
+                align: "right",
+                cell: ({ emp, review }) => (
+                  // gap-4 below lg keeps the invisible 48px hit areas from overlapping.
+                  <div className="flex items-center justify-end gap-4 lg:gap-1">
+                    {!review ? (
+                      <button
+                        onClick={() => setModal({ editing: null, employeeId: emp.id })}
+                        disabled={isPending}
+                        className={`${HIT} inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-50`}
+                      >
+                        <Plus className="h-3.5 w-3.5" aria-hidden /> Start review
+                      </button>
+                    ) : (
+                      <>
+                        {review.status === "Draft" && (
+                          <IconBtn label="Share with employee" onClick={() => share(review, "Submitted")} disabled={isPending} tone="accent">
+                            <Send className="h-3.5 w-3.5" aria-hidden />
+                          </IconBtn>
+                        )}
+                        {review.status === "Submitted" && (
+                          <IconBtn label="Move back to draft" onClick={() => share(review, "Draft")} disabled={isPending}>
+                            <Undo2 className="h-3.5 w-3.5" aria-hidden />
+                          </IconBtn>
+                        )}
+                        <IconBtn label="Edit review" onClick={() => setModal({ editing: review })} disabled={isPending}>
+                          <Pencil className="h-3.5 w-3.5" aria-hidden />
+                        </IconBtn>
+                        <IconBtn label="Delete review" onClick={() => remove(review)} disabled={isPending} tone="danger">
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                        </IconBtn>
+                      </>
+                    )}
                   </div>
-                  <p className="mt-3 text-headline-sm text-ink">{periods.length ? "Nobody matches" : "No reviews yet"}</p>
-                  <p className="mt-1 text-body-md text-ink-muted">{periods.length ? "Try another tab or filter." : "Click “New review” to start your first cycle."}</p>
-                </div>
-              </div>
-            )}
-          </div>
+                ),
+              },
+            ]}
+            renderRow={(row) => {
+              const { emp, review, status } = row;
+              const st = STATUS_STYLE[status];
+              return (
+                <ListRow
+                  onClick={() => setActionsFor(row)}
+                  label={`${emp.name}, ${st.label}${review ? `, rated ${review.rating} of 5` : ""}. Open review actions`}
+                  leading={<Avatar name={emp.name} department={emp.department} size={40} />}
+                  title={emp.name}
+                  subtitle={[emp.department ?? emp.role, review ? ratingLabel(review.rating) : null].filter(Boolean).join(" · ")}
+                  meta={review ? <Stars rating={review.rating} small /> : <span className="text-ink-faint">Not rated</span>}
+                  trailing={
+                    <StatusText tone={st.tone} icon={st.icon} className="text-label-sm">
+                      {st.label}
+                    </StatusText>
+                  }
+                />
+              );
+            }}
+          />
 
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-4 py-3 text-body-sm text-ink-muted sm:flex-row md:px-5">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col items-stretch justify-between gap-3 border-t border-border px-4 py-3 text-body-sm text-ink-muted sm:flex-row sm:items-center md:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-start">
               <span className="tnum">
                 Showing {filtered.length ? `${current * pageSize + 1}–${current * pageSize + visible.length}` : 0} of {filtered.length}
               </span>
@@ -607,7 +692,7 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                     setPageSize(Number(e.target.value));
                     resetPage();
                   }}
-                  className="h-7 rounded-full border border-border bg-surface px-2 text-label-sm text-ink outline-none"
+                  className="min-h-tap rounded-full border border-border bg-surface px-3 text-label-sm text-ink outline-none lg:h-7 lg:min-h-0 lg:px-2"
                 >
                   {PAGE_SIZES.map((n) => (
                     <option key={n} value={n}>
@@ -617,39 +702,36 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                 </select>
               </label>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={current === 0}
-                onClick={() => setPage(current - 1)}
-                className="h-8 rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-40"
-              >
+            {/* Phones: Previous / Next stretch to share the row (big thumb targets). */}
+            <nav aria-label="Roster pages" className="flex items-center gap-2">
+              <button disabled={current === 0} onClick={() => setPage(current - 1)} className={pagerButton}>
                 Previous
               </button>
-              <span className="tnum text-label-sm text-ink">
+              <span className="tnum shrink-0 px-1 text-label-sm text-ink">
                 {current + 1} / {pages}
               </span>
               <button
                 disabled={current >= pages - 1}
                 onClick={() => setPage(current + 1)}
-                className="h-8 rounded-full bg-navy px-3 text-label-sm font-semibold text-on-navy transition-colors hover:bg-navy-2 disabled:opacity-40"
+                className={`${pagerButton} border-navy bg-navy font-semibold text-on-navy hover:bg-navy-2`}
               >
                 Next
               </button>
-            </div>
+            </nav>
           </div>
         </div>
 
         {/* ── Right rail ── */}
         <div className="space-y-6 xl:col-span-4">
           {/* Rating distribution */}
-          <section className="rounded-xl border border-border bg-surface p-5">
+          <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">This cycle</p>
+                <p className="text-eyebrow uppercase text-ink-muted">This cycle</p>
                 <h2 className="text-headline-sm text-ink">Rating distribution</h2>
               </div>
               <div className="text-right">
-                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Average</p>
+                <p className="text-eyebrow uppercase text-ink-muted">Average</p>
                 <p className="tnum text-metric-md text-ink">
                   {ratings.length ? average.toFixed(1) : "—"}
                   <span className="ml-1 text-body-sm font-normal text-ink-muted">/ 5</span>
@@ -691,8 +773,8 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
           </section>
 
           {/* Department averages */}
-          <section className="rounded-xl border border-border bg-surface p-5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">By department</p>
+          <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
+            <p className="text-eyebrow uppercase text-ink-muted">By department</p>
             <h2 className="text-headline-sm text-ink">Average rating</h2>
             <div className="mt-4 space-y-3">
               {deptAvgs.map((d) => (
@@ -713,10 +795,10 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
           </section>
 
           {/* Recent written feedback */}
-          <section className="rounded-xl border border-border bg-surface p-5">
+          <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Written feedback</p>
+                <p className="text-eyebrow uppercase text-ink-muted">Written feedback</p>
                 <h2 className="text-headline-sm text-ink">Recent strengths notes</h2>
               </div>
               {notes.length > 0 && <span className="h-2 w-2 rounded-full bg-accent ring-1 ring-ink/30" />}
@@ -730,10 +812,10 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
                       <Avatar name={r.reviewerName} department={null} size={26} />
                       <span className="min-w-0">
                         <span className="block truncate text-label-sm font-semibold text-ink">{r.reviewerName}</span>
-                        <span className="block truncate text-[11px] text-ink-muted">on {r.employeeName}{empById.get(r.employeeId)?.department ? ` · ${empById.get(r.employeeId)?.department}` : ""}</span>
+                        <span className="block truncate text-label-sm text-ink-muted">on {r.employeeName}{empById.get(r.employeeId)?.department ? ` · ${empById.get(r.employeeId)?.department}` : ""}</span>
                       </span>
                     </span>
-                    <span className="tnum shrink-0 text-[11px] text-ink-muted">{fmtDate(r.updatedAt)}</span>
+                    <span className="tnum shrink-0 text-label-sm text-ink-muted">{fmtDate(r.updatedAt)}</span>
                   </figcaption>
                 </figure>
               ))}
@@ -752,11 +834,118 @@ export default function PerformanceManager({ reviews, employees }: { reviews: Re
         onClose={() => setModal(null)}
         onSave={handleSave}
       />
+
+      {employees.length > 0 && <Fab label="New review" icon={<Plus className="h-5 w-5" />} onClick={() => setModal({ editing: null })} />}
+
+      {/* Phones: tapping a roster row opens that person's actions here. */}
+      <RowActionsSheet
+        row={actionsFor}
+        period={period}
+        disabled={isPending}
+        onClose={() => setActionsFor(null)}
+        onStart={(emp) => setModal({ editing: null, employeeId: emp.id })}
+        onShare={share}
+        onEdit={(r) => setModal({ editing: r })}
+        onDelete={remove}
+      />
+      <ConfirmSheet confirmation={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }
 
-// Small round icon button used in the roster's action column.
+/*
+  The phone version of the roster's action buttons: a bottom sheet with
+  full-width 48px buttons. Each button closes the sheet, then acts.
+  We keep the last row on screen while the sheet slides away.
+*/
+function RowActionsSheet({
+  row,
+  period,
+  disabled,
+  onClose,
+  onStart,
+  onShare,
+  onEdit,
+  onDelete,
+}: {
+  row: RosterRow | null;
+  period: string;
+  disabled: boolean;
+  onClose: () => void;
+  onStart: (emp: PerfEmployee) => void;
+  onShare: (r: ReviewRow, status: "Submitted" | "Draft") => void;
+  onEdit: (r: ReviewRow) => void;
+  onDelete: (r: ReviewRow) => void;
+}) {
+  const [last, setLast] = useState(row);
+  if (row && row !== last) setLast(row);
+  const r = row ?? last;
+  const review = r?.review ?? null;
+  const st = r ? STATUS_STYLE[r.status] : null;
+  const act = (fn: () => void) => () => {
+    onClose();
+    fn();
+  };
+
+  return (
+    <BottomSheet
+      open={row !== null}
+      onClose={onClose}
+      eyebrow={period ? `Cycle ${period}` : undefined}
+      title={r?.emp.name ?? ""}
+      description={[r?.emp.role, r?.emp.department].filter(Boolean).join(" · ")}
+    >
+      {r && st && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-sunken p-3">
+            <StatusText tone={st.tone} icon={st.icon} variant="pill">
+              {st.label}
+            </StatusText>
+            {review ? (
+              <span className="flex items-center gap-2 text-body-sm text-ink-muted">
+                <Stars rating={review.rating} />
+                {ratingLabel(review.rating)}
+              </span>
+            ) : (
+              <span className="text-body-sm text-ink-muted">Not rated yet</span>
+            )}
+          </div>
+          {review && <p className="text-body-sm text-ink-muted">Reviewed by {review.reviewerName}</p>}
+
+          <div className="flex flex-col gap-2">
+            {!review ? (
+              <button type="button" disabled={disabled} onClick={act(() => onStart(r.emp))} className={buttonClass("primary", { block: true })}>
+                <Plus className="h-4 w-4" aria-hidden /> Start review
+              </button>
+            ) : (
+              <>
+                {review.status === "Draft" && (
+                  <button type="button" disabled={disabled} onClick={act(() => onShare(review, "Submitted"))} className={buttonClass("primary", { block: true })}>
+                    <Send className="h-4 w-4" aria-hidden /> Share with employee
+                  </button>
+                )}
+                {review.status === "Submitted" && (
+                  <button type="button" disabled={disabled} onClick={act(() => onShare(review, "Draft"))} className={buttonClass("secondary", { block: true })}>
+                    <Undo2 className="h-4 w-4" aria-hidden /> Move back to draft
+                  </button>
+                )}
+                <button type="button" disabled={disabled} onClick={act(() => onEdit(review))} className={buttonClass("secondary", { block: true })}>
+                  <Pencil className="h-4 w-4" aria-hidden /> Edit review
+                </button>
+                <button type="button" disabled={disabled} onClick={act(() => onDelete(review))} className={buttonClass("danger", { block: true })}>
+                  <Trash2 className="h-4 w-4" aria-hidden /> Delete review
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </BottomSheet>
+  );
+}
+
+// Small round icon button used in the roster's action column (32px, with an
+// invisible 48px hit area below lg).
 function IconBtn({
   label,
   onClick,
@@ -772,7 +961,7 @@ function IconBtn({
 }) {
   const hover = tone === "accent" ? "hover:bg-accent-soft hover:text-accent-ink" : tone === "danger" ? "hover:bg-critical/10 hover:text-critical" : "hover:bg-surface-2 hover:text-ink";
   return (
-    <button onClick={onClick} disabled={disabled} aria-label={label} title={label} className={`grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors ${hover} disabled:opacity-50`}>
+    <button onClick={onClick} disabled={disabled} aria-label={label} title={label} className={`${HIT} grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors ${hover} disabled:opacity-50`}>
       {children}
     </button>
   );

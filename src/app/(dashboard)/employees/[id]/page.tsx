@@ -19,8 +19,10 @@ import type { Employee, EmployeeStatus } from "@/lib/sample-data";
 import EmployeeAvatar from "@/components/employees/EmployeeAvatar";
 import ProfileActions from "@/components/employees/ProfileActions";
 import { statusDot } from "@/components/employees/StatusBadge";
-import { formatDate, formatMonthYear, tenure } from "@/components/employees/employee-format";
+import { formatDate, formatMonthYear, joinedAgo, tenure } from "@/components/employees/employee-format";
+import CopyButton from "@/components/employees/CopyButton";
 import AttendanceStatusBadge from "@/components/attendance/AttendanceStatusBadge";
+import StatusText from "@/components/ui/StatusText";
 
 /*
   One employee's profile ("employee record"), at /employees/<id>.
@@ -157,55 +159,113 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       note: latestShared ? `${latestShared.period} · ${ratingLabel(latestShared.rating)}` : "No reviews yet",
     });
 
+  // Phone/tablet "jump to" chips — one per section this viewer can actually see,
+  // in the same order the cards appear on a phone.
+  const anchors: { id: string; label: string }[] = [
+    { id: "details", label: "Overview" },
+    ...(canSeeLeave ? [{ id: "time-off", label: "Time off" }] : []),
+    { id: "career", label: "Career" },
+    ...(canSeeReviews ? [{ id: "reviews", label: "Reviews" }] : []),
+    ...(canSeeAttendance ? [{ id: "attendance", label: "Attendance" }] : []),
+    ...(canSeePayroll || canSeeOwnPayslips ? [{ id: "pay", label: "Pay" }] : []),
+    { id: "contact", label: "Contact" },
+  ];
+
   const lastUpdated = record.updatedAt.toLocaleDateString("en-US", { timeZone: APP_TIME_ZONE, month: "short", day: "numeric", year: "numeric" });
 
   return (
-    <div className="space-y-6">
-      {/* ── Breadcrumb strip ── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/employees" className="inline-flex items-center gap-2 text-label-md text-ink transition-colors hover:text-ink-muted">
-          <ArrowLeft className="h-4 w-4" />
+    <div className="space-y-4 lg:space-y-6">
+      {/* ── Phones & tablets: the mockup's navy hero card, centred ── */}
+      <section className="rounded-xl border border-navy-line bg-navy p-4 text-on-navy lg:hidden">
+        <Link
+          href="/employees"
+          className="inline-flex min-h-tap items-center gap-2 rounded-full bg-navy-2 px-4 text-label-md text-on-navy transition-colors hover:bg-navy-line"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          People
+        </Link>
+        <div className="mt-2 flex flex-col items-center text-center">
+          <div className="relative">
+            <EmployeeAvatar name={record.name} department={deptName} size="lg" />
+            <span aria-hidden className={`absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full ring-2 ring-navy ${statusDot(record.status)}`} />
+          </div>
+          <div className="mt-3 flex max-w-full flex-wrap items-center justify-center gap-2">
+            <h1 className="wrap-anywhere font-display text-headline-lg text-on-navy">{record.name}</h1>
+            {deptName && <span className={deptBadgeClass(deptName)}>{deptName}</span>}
+            {isSelf && <span className="rounded-full bg-accent px-2 py-px text-eyebrow uppercase text-on-accent">You</span>}
+          </div>
+          <p className="mt-1 text-body-md font-semibold text-on-navy">
+            {record.role} · {deptName ?? "Unassigned"}
+          </p>
+          <p className="tnum mt-0.5 text-body-sm text-on-navy-muted">
+            Joined {joinedAgo(record.startedAt, today)} ({formatMonthYear(record.startedAt)}) · {record.status}
+          </p>
+        </div>
+        <div className="mt-4 border-t border-navy-line pt-4">
+          <ProfileActions employee={employee} departments={departments} canManage={canManage} variant="tiles" />
+        </div>
+      </section>
+
+      {/* ── Phones & tablets: chips that jump to each section ── */}
+      <nav aria-label="Profile sections" className="-mx-gutter flex gap-2 overflow-x-auto overscroll-x-contain px-gutter [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0 lg:hidden">
+        {anchors.map((a, i) => (
+          <a key={a.id} href={`#${a.id}`} className="group flex min-h-tap shrink-0 items-center">
+            <span
+              className={`inline-flex h-9 items-center rounded-full border px-4 text-label-md transition-colors ${
+                i === 0 ? "border-navy bg-navy text-on-navy" : "border-border bg-surface text-ink-muted group-hover:text-ink"
+              }`}
+            >
+              {a.label}
+            </span>
+          </a>
+        ))}
+      </nav>
+
+      {/* ── Desktop: breadcrumb strip ── */}
+      <div className="hidden flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <Link href="/employees" className="-ml-1 inline-flex min-h-tap items-center gap-2 px-1 text-label-md text-ink transition-colors hover:text-ink-muted lg:min-h-0">
+          <ArrowLeft className="h-4 w-4" aria-hidden />
           Back to Employees directory
         </Link>
         <p className="text-body-sm text-ink-muted">
-          <span className="text-[11px] font-bold uppercase tracking-[0.06em]">Employee record</span>
+          <span className="text-eyebrow uppercase">Employee record</span>
           <span className="mx-2">·</span>
           Last updated {lastUpdated}
         </p>
       </div>
 
-      {/* ── Navy hero band ── */}
-      <section className="rounded-xl border border-navy-line bg-navy p-5 text-on-navy sm:p-8">
+      {/* ── Desktop: navy hero band ── */}
+      <section className="hidden rounded-xl border border-navy-line bg-navy p-8 text-on-navy lg:block">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start">
             <div className="relative w-fit">
               <EmployeeAvatar name={record.name} department={deptName} size="xl" />
-              <span className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full ring-2 ring-navy ${statusDot(record.status)}`} />
+              <span aria-hidden className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full ring-2 ring-navy ${statusDot(record.status)}`} />
             </div>
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 {deptName ? (
                   <span className={deptBadgeClass(deptName)}>{deptName}</span>
                 ) : (
-                  <span className="inline-flex h-6 items-center rounded-full border border-navy-line px-2.5 text-[11px] font-bold uppercase tracking-[0.06em] text-on-navy-muted">Unassigned</span>
+                  <span className="inline-flex h-6 items-center rounded-full border border-navy-line px-2.5 text-eyebrow uppercase text-on-navy-muted">Unassigned</span>
                 )}
                 <span className="inline-flex items-center gap-1.5 text-body-sm text-on-navy-muted">
-                  <span className={`h-1.5 w-1.5 rounded-full ${statusDot(record.status)}`} />
+                  <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${statusDot(record.status)}`} />
                   {record.status}
                 </span>
                 {isSelf && (
                   <span className="rounded-full bg-accent px-2 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-on-accent">You</span>
                 )}
               </div>
-              <h1 className="break-words text-headline-lg text-on-navy md:text-headline-xl">{record.name}</h1>
+              <h1 className="wrap-anywhere text-headline-lg text-on-navy md:text-headline-xl">{record.name}</h1>
               <p className="text-body-md text-on-navy">{record.role}</p>
               <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-body-sm text-on-navy-muted">
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <Mail className="h-4 w-4 shrink-0" />
+                <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+                  <Mail className="h-4 w-4 shrink-0" aria-hidden />
                   <span className="truncate">{record.email}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <CalendarDays className="h-4 w-4 shrink-0" />
+                  <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
                   Joined {formatMonthYear(record.startedAt)} ({tenure(record.startedAt, today)})
                 </span>
               </div>
@@ -216,20 +276,27 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       </section>
 
       {/* ── Metrics strip ── */}
-      <section className={`grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-surface ${metrics.length === 4 ? "lg:grid-cols-4" : metrics.length === 3 ? "lg:grid-cols-3" : ""}`}>
+      <section aria-label="Key numbers" className={`hidden grid-cols-2 lg:grid overflow-hidden rounded-xl border border-border bg-surface ${metrics.length === 4 ? "lg:grid-cols-4" : metrics.length === 3 ? "lg:grid-cols-3" : ""}`}>
         {metrics.map((m, i) => (
-          <div key={m.label} className={`p-4 sm:p-5 ${i % 2 ? "border-l border-border" : ""} ${i >= 2 ? "border-t border-border lg:border-t-0 lg:border-l" : ""}`}>
-            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{m.label}</p>
+          <div key={m.label} className={`min-w-0 p-4 sm:p-5 ${i % 2 ? "border-l border-border" : ""} ${i >= 2 ? "border-t border-border lg:border-t-0 lg:border-l" : ""}`}>
+            <p className="text-eyebrow uppercase text-ink-muted">{m.label}</p>
             <p className="tnum mt-1 text-metric-md text-ink">{m.value}</p>
             {m.note && <p className="text-body-sm text-ink-faint">{m.note}</p>}
           </div>
         ))}
       </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      {/*
+        Phones & tablets: ONE column of cards in the mockup's order (overview,
+        time off, career, …, contact). The two column wrappers use
+        "display: contents" below lg, so their cards become direct children of
+        this flex column and the order-N classes can shuffle them. From lg up
+        it's the original two-column grid and the order classes are reset.
+      */}
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
         {/* ── Left column ── */}
-        <div className="min-w-0 space-y-6">
-          <Card eyebrow="Tenure & progression" title="Career timeline" aside={<Chip>{tenure(record.startedAt, today)}</Chip>}>
+        <div className="contents min-w-0 lg:block lg:space-y-6">
+          <Card id="career" className="order-3 lg:order-none" eyebrow="Tenure & progression" title="Career timeline" aside={<Chip>{tenure(record.startedAt, today)}</Chip>}>
             <ol className="relative space-y-6 border-l border-border pl-6">
               {timeline.map((t, i) => (
                 <li key={`${t.tag}-${t.date}-${i}`} className="relative">
@@ -246,22 +313,22 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
           </Card>
 
           {canSeeLeave && (
-            <Card eyebrow="Annual entitlements" title="Time-off & leave balances" aside={<span className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Cycle: Jan 01 – Dec 31</span>}>
+            <Card id="time-off" className="order-2 lg:order-none" eyebrow="Annual entitlements" title="Time-off & leave balances" aside={<span className="text-eyebrow uppercase text-ink-muted">Cycle: Jan 01 – Dec 31</span>}>
               <div className="space-y-5">
                 <Meter label="Annual paid leave" detail={`${remaining} of ${record.leaveAllowance} days remaining (${usedPaid} used)`} value={usedPaid} max={record.leaveAllowance} />
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <MiniStat label="Sick days" value={sickDays} />
                   <MiniStat label="Unpaid days" value={unpaidDays} />
                   <MiniStat label="Pending" value={pendingDays} />
                 </div>
 
                 {nextLeave && (
-                  <div className="flex items-center gap-4 rounded-xl border border-border p-4">
+                  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-4 sm:flex-nowrap sm:gap-4">
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-2 text-ink">
-                      <Plane className="h-4 w-4" />
+                      <Plane className="h-4 w-4" aria-hidden />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Next scheduled leave</p>
+                      <p className="text-eyebrow uppercase text-ink-muted">Next scheduled leave</p>
                       <p className="text-body-md font-semibold text-ink">{nextLeave.type} leave</p>
                       <p className="tnum text-body-sm text-ink-muted">
                         {formatLeaveRange(nextLeave.startDate, nextLeave.endDate)} · {nextLeave.days} {nextLeave.days === 1 ? "day" : "days"}
@@ -272,14 +339,14 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                 )}
 
                 <div>
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Recent requests</p>
+                  <p className="mb-2 text-eyebrow uppercase text-ink-muted">Recent requests</p>
                   {leave.length === 0 ? (
                     <p className="text-body-sm text-ink-faint">No leave requests yet.</p>
                   ) : (
                     <ul className="divide-y divide-border border-y border-border">
                       {leave.slice(0, 6).map((l) => (
                         <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-label-sm ${leaveStyle(l.type).chip}`}>{l.type}</span>
                             <span className="tnum text-body-sm text-ink">{formatLeaveRange(l.startDate, l.endDate)}</span>
                             <span className="tnum text-body-sm text-ink-faint">
@@ -298,10 +365,12 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
 
           {canSeeReviews && (
             <Card
+              id="reviews"
+              className="order-4 lg:order-none"
               eyebrow="Performance"
               title="Reviews"
               aside={
-                <Link href="/performance" className="text-label-md text-ink underline underline-offset-4 hover:opacity-80">
+                <Link href="/performance" className="inline-flex min-h-tap shrink-0 items-center text-label-md text-ink underline underline-offset-4 hover:opacity-80 lg:min-h-0">
                   Open performance
                 </Link>
               }
@@ -313,7 +382,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                   {reviews.map((r) => (
                     <li key={r.id} className="rounded-xl border border-border p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-body-md font-semibold text-ink">{r.period}</p>
                           <p className="text-body-sm text-ink-muted">
                             {ratingLabel(r.rating)} · by {r.reviewerName}
@@ -328,13 +397,13 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                         <dl className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
                           {r.strengths && (
                             <div>
-                              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Strengths</dt>
+                              <dt className="text-eyebrow uppercase text-ink-muted">Strengths</dt>
                               <dd className="mt-0.5 line-clamp-3 text-body-sm text-ink">{r.strengths}</dd>
                             </div>
                           )}
                           {r.goals && (
                             <div>
-                              <dt className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Goals</dt>
+                              <dt className="text-eyebrow uppercase text-ink-muted">Goals</dt>
                               <dd className="mt-0.5 line-clamp-3 text-body-sm text-ink">{r.goals}</dd>
                             </div>
                           )}
@@ -349,10 +418,39 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
         </div>
 
         {/* ── Right column ── */}
-        <div className="min-w-0 space-y-6">
-          <Card eyebrow="Official records" title="Contact & details">
+        <div className="contents min-w-0 lg:block lg:space-y-6">
+          {/* Phones & tablets only: the job facts, first thing under the hero. */}
+          <Card id="details" className="order-1 lg:hidden" eyebrow="Overview" title={`About ${record.name.split(" ")[0]}`}>
+            <dl className="grid grid-cols-2 gap-2">
+              <Fact label="Role" value={record.role} wide />
+              <Fact label="Department" value={deptName ?? "Unassigned"} />
+              <Fact label="Status" value={record.status} />
+              <Fact label="Start date" value={formatDate(record.startedAt)} />
+              <Fact label="Tenure" value={tenure(record.startedAt, today)} />
+              <Fact label="Leave allowance" value={`${record.leaveAllowance} days / yr`} />
+              {canManage && <Fact label="Login account" value={record.user ? `Linked · ${record.user.role}` : "Not linked"} />}
+            </dl>
+          </Card>
+
+          {/* Phones & tablets only: how to reach them (the mockup's "Direct contact"). */}
+          <Card id="contact" className="order-7 lg:hidden" eyebrow="Official records" title="Direct contact">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-full bg-sunken text-ink" aria-hidden>
+                <Mail className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-label-sm text-ink-muted">Work email</p>
+                <a href={`mailto:${record.email}`} className="block truncate py-3.5 text-body-md font-semibold text-ink underline-offset-2 hover:underline lg:py-0">
+                  {record.email}
+                </a>
+              </div>
+              <CopyButton value={record.email} label="Copy work email" />
+            </div>
+          </Card>
+
+          <Card className="hidden lg:block" eyebrow="Official records" title="Contact & details">
             <dl className="divide-y divide-border text-body-sm">
-              <Row label="Work email" value={<a href={`mailto:${record.email}`} className="break-all underline-offset-2 hover:underline">{record.email}</a>} />
+              <Row label="Work email" value={<a href={`mailto:${record.email}`} className="underline-offset-2 hover:underline">{record.email}</a>} />
               <Row label="Role" value={record.role} />
               <Row label="Department" value={deptName ?? "Unassigned"} />
               <Row label="Status" value={record.status} />
@@ -364,10 +462,12 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
 
           {canSeeAttendance && (
             <Card
+              id="attendance"
+              className="order-5 lg:order-none"
               eyebrow="Attendance"
               title="Recent days"
               aside={
-                <Link href="/attendance" className="text-label-md text-ink underline underline-offset-4 hover:opacity-80">
+                <Link href="/attendance" className="inline-flex min-h-tap shrink-0 items-center text-label-md text-ink underline underline-offset-4 hover:opacity-80 lg:min-h-0">
                   View all
                 </Link>
               }
@@ -376,7 +476,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                 <p className="text-body-sm text-ink-faint">No attendance recorded yet.</p>
               ) : (
                 <>
-                  <div className="mb-4 grid grid-cols-4 gap-2 text-center">
+                  <div className="mb-4 grid grid-cols-2 gap-2 text-center min-[400px]:grid-cols-4">
                     {(["Present", "Late", "Remote", "Absent"] as const).map((s) => (
                       <div key={s} className="rounded-lg bg-bg px-1 py-2">
                         <p className="tnum font-display text-headline-sm text-ink">{attCount(s)}</p>
@@ -403,7 +503,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
           )}
 
           {canSeePayroll && (
-            <Card eyebrow="Compensation" title="Salary & payslips" aside={<Lock className="h-4 w-4 text-ink-muted" aria-label="Restricted to Admin and HR" />}>
+            <Card id="pay" className="order-6 lg:order-none" eyebrow="Compensation" title="Salary & payslips" aside={<Lock className="h-4 w-4 text-ink-muted" aria-label="Restricted to Admin and HR" />}>
               <SalaryBlock salary={record.salary} />
               <PayslipList payslips={payslips} showRunStatus />
               <p className="mt-4 text-body-sm text-ink-faint">Restricted · Admin &amp; HR only</p>
@@ -412,10 +512,12 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
 
           {canSeeOwnPayslips && (
             <Card
+              id="pay"
+              className="order-6 lg:order-none"
               eyebrow="Payroll"
               title="Your payslips"
               aside={
-                <Link href="/payroll" className="text-label-md text-ink underline underline-offset-4 hover:opacity-80">
+                <Link href="/payroll" className="inline-flex min-h-tap shrink-0 items-center text-label-md text-ink underline underline-offset-4 hover:opacity-80 lg:min-h-0">
                   View all
                 </Link>
               }
@@ -432,12 +534,26 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
 // ── Page-local building blocks ─────────────────────────────────────────
 
 // A white card with a caps eyebrow, a title and an optional right-side extra.
-function Card({ eyebrow, title, aside, children }: { eyebrow: string; title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+function Card({
+  id,
+  className = "",
+  eyebrow,
+  title,
+  aside,
+  children,
+}: {
+  id?: string; // anchor target for the phone "jump to" chips
+  className?: string;
+  eyebrow: string;
+  title: string;
+  aside?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="rounded-xl border border-border bg-surface p-5 sm:p-6">
-      <div className="mb-5 flex items-start justify-between gap-3 border-b border-border pb-4">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{eyebrow}</p>
+    <section id={id} className={`min-w-0 rounded-xl border border-border bg-surface p-4 sm:p-6 ${className}`}>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 border-b border-border pb-4">
+        <div className="min-w-0">
+          <p className="text-eyebrow uppercase text-ink-muted">{eyebrow}</p>
           <h2 className="text-headline-sm text-ink">{title}</h2>
         </div>
         {aside}
@@ -448,7 +564,7 @@ function Card({ eyebrow, title, aside, children }: { eyebrow: string; title: str
 }
 
 function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="tnum whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-accent-ink">{children}</span>;
+  return <span className="tnum whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-1 text-eyebrow uppercase text-accent-ink">{children}</span>;
 }
 
 // "Label ......... value" row for the details card.
@@ -456,12 +572,23 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-3">
       <dt className="shrink-0 text-ink-muted">{label}</dt>
-      <dd className="min-w-0 text-right text-ink">{value}</dd>
+      <dd className="min-w-0 text-right text-ink wrap-anywhere">{value}</dd>
     </div>
   );
 }
 
-// A labelled progress bar (used / max).
+// One fact in a sunken "info well" (phone overview card).
+function Fact({ label, value, wide }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`min-w-0 rounded-lg bg-sunken p-3 ${wide ? "col-span-2" : ""}`}>
+      <dt className="text-eyebrow uppercase text-ink-muted">{label}</dt>
+      <dd className="mt-0.5 text-body-md font-semibold text-ink wrap-anywhere">{value}</dd>
+    </div>
+  );
+}
+
+// A labelled progress bar (used / max). Phones/tablets: butter-yellow on a
+// sunken track (the mobile mockup); desktop keeps the navy bar.
 function Meter({ label, detail, value, max }: { label: string; detail: string; value: number; max: number }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
@@ -470,8 +597,8 @@ function Meter({ label, detail, value, max }: { label: string; detail: string; v
         <span className="text-body-sm font-semibold text-ink">{label}</span>
         <span className="tnum text-body-sm text-ink-muted">{detail}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label}>
-        <div className="h-full rounded-full bg-navy" style={{ width: `${pct}%` }} />
+      <div className="h-2 overflow-hidden rounded-full bg-sunken lg:bg-surface-2" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label}>
+        <div className="h-full rounded-full bg-accent lg:bg-navy" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -479,8 +606,8 @@ function Meter({ label, detail, value, max }: { label: string; detail: string; v
 
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg bg-bg px-3 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</p>
+    <div className="min-w-0 rounded-lg bg-bg px-2.5 py-2.5 sm:px-3">
+      <p className="truncate text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</p>
       <p className="tnum font-display text-headline-sm text-ink">
         {value} <span className="text-body-sm font-normal text-ink-muted">{value === 1 ? "day" : "days"}</span>
       </p>
@@ -488,11 +615,14 @@ function MiniStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-// Approved / Pending / Rejected as a small coloured pill.
+// Approved / Pending / Rejected as a pill with an icon + colour + the word.
 function LeaveStatus({ status }: { status: string }) {
-  const tone =
-    status === "Approved" ? "bg-good/10 text-good" : status === "Rejected" ? "bg-critical/10 text-critical" : "bg-warning/10 text-warning";
-  return <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.06em] ${tone}`}>{status}</span>;
+  const tone = status === "Approved" ? "good" : status === "Rejected" ? "critical" : "warning";
+  return (
+    <StatusText tone={tone} variant="pill" className="shrink-0">
+      {status}
+    </StatusText>
+  );
 }
 
 // Annual salary plus the monthly breakdown the payroll page uses.
@@ -500,16 +630,16 @@ function SalaryBlock({ salary }: { salary: number }) {
   const month = computePayslip(salary);
   return (
     <div className="mb-5">
-      <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Annual gross salary</p>
+      <p className="text-eyebrow uppercase text-ink-muted">Annual gross salary</p>
       <p className="tnum mt-1 text-metric-md text-ink">{salary > 0 ? formatMoney(salary) : "Not set"}</p>
       {salary > 0 && (
-        <dl className="mt-3 grid grid-cols-3 gap-2 text-body-sm">
+        <dl className="mt-3 grid grid-cols-1 gap-2 text-body-sm sm:grid-cols-3">
           {[
             ["Monthly gross", month.gross],
             ["Deductions", month.deductions],
             ["Net pay", month.net],
           ].map(([label, n]) => (
-            <div key={label} className="rounded-lg bg-bg px-2.5 py-2">
+            <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 rounded-lg bg-bg px-2.5 py-2 sm:block">
               <dt className="text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</dt>
               <dd className="tnum font-semibold text-ink">{formatMoney(Number(n))}</dd>
             </div>
@@ -531,11 +661,11 @@ function PayslipList({
   if (payslips.length === 0) return <p className="text-body-sm text-ink-faint">No payslips yet.</p>;
   return (
     <div>
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Recent payslips</p>
+      <p className="mb-2 text-eyebrow uppercase text-ink-muted">Recent payslips</p>
       <ul className="divide-y divide-border border-y border-border">
         {payslips.map((p) => (
           <li key={p.id} className="flex items-center justify-between gap-2 py-2.5 text-body-sm">
-            <span className="text-ink">
+            <span className="min-w-0 text-ink">
               {periodLabel(p.payRun.period)}
               {showRunStatus && p.payRun.status !== "Finalized" && (
                 <span className="ml-2 rounded-full bg-surface-2 px-2 py-px text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">{p.payRun.status}</span>

@@ -5,6 +5,8 @@ import { canManageAttendance } from "@/lib/permissions";
 import { todayISO, type AttendanceRow } from "@/lib/attendance";
 import AttendanceManager from "@/components/attendance/AttendanceManager";
 import MyAttendance from "@/components/attendance/MyAttendance";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
 
 export default async function AttendancePage() {
   const session = await auth();
@@ -23,7 +25,9 @@ export default async function AttendancePage() {
   if (canManage) {
     // Records + the full staff list (so we can also show who has NOT
     // clocked in on a given day), fetched in parallel.
-    const [records, employees] = await Promise.all([
+    // Approved leave is read too, so the phone roster can group people who
+    // are off on approved leave instead of listing them as "not checked in".
+    const [records, employees, leave] = await Promise.all([
       prisma.attendanceRecord.findMany({
         orderBy: [{ date: "desc" }, { clockIn: "asc" }],
         include: { employee: { select: { name: true } } },
@@ -31,6 +35,10 @@ export default async function AttendancePage() {
       prisma.employee.findMany({
         orderBy: { name: "asc" },
         select: { id: true, name: true, role: true, email: true, startedAt: true, department: { select: { name: true } } },
+      }),
+      prisma.leaveRequest.findMany({
+        where: { status: "Approved" },
+        select: { employeeId: true, type: true, startDate: true, endDate: true },
       }),
     ]);
     return (
@@ -44,6 +52,7 @@ export default async function AttendancePage() {
           startedAt: e.startedAt,
           department: e.department?.name ?? null,
         }))}
+        leave={leave}
         today={today}
       />
     );
@@ -89,23 +98,14 @@ function toRow(r: {
 
 function NotLinked() {
   return (
-    <div className="space-y-6">
-      <header className="border-b border-border pb-6">
-        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Operations • Attendance</p>
-        <h1 className="text-headline-lg text-ink md:text-headline-xl">Clock in, clock out.</h1>
-      </header>
-      <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
-        <div className="max-w-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-2">
-            <Clock className="h-5 w-5 text-ink-faint" />
-          </div>
-          <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>
-          <p className="mt-1 text-body-md text-ink-muted">
-            Ask an administrator to link your login to your employee record, then
-            you&apos;ll be able to clock in and out here.
-          </p>
-        </div>
-      </div>
+    <div>
+      <PageHeader eyebrow="Operations • Attendance" title="Clock in, clock out." className="border-b border-border pb-6" />
+      <EmptyState
+        icon={Clock}
+        title="Your account isn’t linked yet"
+        description="Ask an administrator to link your login to your employee record, then you’ll be able to clock in and out here."
+        className="rounded-xl border border-border bg-surface"
+      />
     </div>
   );
 }

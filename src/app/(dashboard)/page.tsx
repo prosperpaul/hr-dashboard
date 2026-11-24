@@ -260,10 +260,13 @@ export default async function OverviewPage() {
   const summary = sentence.charAt(0).toUpperCase() + sentence.slice(1);
 
   return (
-    <div className="space-y-8 md:space-y-10">
+    // A flex column so phones can reorder sections to match the mobile mockup
+    // (hero → approvals → who's out → key figures → the rest); from md up the
+    // order-* classes reset and the desktop order applies.
+    <div className="flex flex-col gap-6 md:gap-10">
       {/* 1 · Greeting */}
       <section className="space-y-2">
-        <p className="flex items-center gap-2 text-ink-muted">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
           <Caps>Daily dispatch</Caps>
           <span className="h-1 w-1 rounded-full bg-ink" />
           <Caps>
@@ -271,7 +274,7 @@ export default async function OverviewPage() {
           </Caps>
         </p>
         <div>
-          <h1 className="font-display text-[36px] font-bold leading-[40px] tracking-[-0.02em] text-ink md:text-[48px] md:leading-[52px] md:tracking-[-0.03em]">
+          <h1 className="font-display text-headline-lg text-ink md:text-[48px] md:leading-[52px] md:tracking-[-0.03em]">
             Good {partOfDay}, {firstName}.
           </h1>
         </div>
@@ -286,13 +289,23 @@ export default async function OverviewPage() {
         history={history}
       />
 
-      {/* 3 · Slim ledger strip */}
-      <section className="grid grid-cols-2 gap-y-6 border-y border-border py-6 md:grid-cols-4 md:divide-x md:divide-border">
+      {/* 3 · Key figures.
+          Phones (mobile mockup): a white card listing "label …… value note",
+          one figure per row, placed after the approvals.
+          md+: the original open strip, four columns split by rules. */}
+      <section
+        aria-label="Key figures"
+        className="order-1 divide-y divide-border rounded-xl border border-border bg-surface px-4 md:order-none md:grid md:grid-cols-4 md:divide-x md:divide-y-0 md:rounded-none md:border-x-0 md:bg-transparent md:px-0 md:py-6"
+      >
         {ledger.map((m) => (
-          <div key={m.label} className="space-y-1 md:px-6 md:first:pl-0">
-            <Caps className="block text-ink-muted">{m.label}</Caps>
-            <p className="flex flex-wrap items-baseline gap-x-1.5">
-              <span className="tnum font-display text-[28px] font-semibold leading-8 text-ink">{m.value}</span>
+          <div
+            key={m.label}
+            className="flex min-h-tap min-w-0 items-center justify-between gap-3 py-3 md:block md:space-y-1 md:px-6 md:py-0 md:first:pl-0"
+          >
+            <span className="text-body-md text-ink-muted md:hidden">{m.label}</span>
+            <Caps className="hidden text-ink-muted md:block">{m.label}</Caps>
+            <p className="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1.5 md:justify-start">
+              <span className="tnum font-display text-headline-sm text-ink md:text-metric-md">{m.value}</span>
               <span className="text-body-sm text-ink-muted">{m.note}</span>
             </p>
           </div>
@@ -303,18 +316,22 @@ export default async function OverviewPage() {
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {canApprove && (
           <div className="space-y-4 lg:col-span-7">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-3">
               <h2 className="flex items-center gap-2 text-headline-sm text-ink">
                 Needs your attention
                 {pendingCount > 0 && (
-                  <span className="tnum grid h-6 min-w-6 place-items-center rounded-full bg-navy px-1.5 font-sans text-[11px] font-bold text-on-navy">
+                  <span className="tnum grid h-6 min-w-6 place-items-center rounded-full bg-navy px-1.5 font-sans text-eyebrow text-on-navy">
                     {pendingCount}
                   </span>
                 )}
               </h2>
-              <Link href="/leave" className="group inline-flex items-center gap-1 text-ink-muted transition-colors hover:text-ink">
+              {/* 48px tall hit area on phones; compact from lg */}
+              <Link
+                href="/leave"
+                className="group inline-flex min-h-tap items-center gap-1 text-ink-muted transition-colors hover:text-ink lg:min-h-0"
+              >
                 <Caps>All leave requests</Caps>
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
               </Link>
             </div>
             <ApprovalQueue requests={pendingRows} />
@@ -328,14 +345,22 @@ export default async function OverviewPage() {
       </section>
 
       {/* 5 · New faces */}
+      <div className="order-2 md:order-none">
       <NewFaces faces={faces} recent={newHires30 > 0} total={totalEmployees} />
 
-      {/* 6 · Department split */}
-      <AcrossCompany departments={departments} assigned={assigned} statusLine={statusLine} />
+      </div>
 
-      <p className="text-body-sm text-ink-muted">
+      {/* 6 · Department split */}
+      <div className="order-3 md:order-none">
+        <AcrossCompany departments={departments} assigned={assigned} statusLine={statusLine} />
+      </div>
+
+      <p className="order-4 text-body-sm text-ink-muted md:order-none">
         {pipeline} {pipeline === 1 ? "candidate is" : "candidates are"} in the hiring pipeline ·{" "}
-        <Link href="/recruitment" className="font-medium text-ink underline-offset-4 hover:underline">
+        <Link
+          href="/recruitment"
+          className="inline-flex min-h-tap items-center font-medium text-ink underline-offset-4 hover:underline lg:min-h-0"
+        >
           Go to recruitment
         </Link>
       </p>

@@ -14,7 +14,12 @@ import {
   AlertTriangle,
   AlarmClock,
   Timer,
+  ChevronDown,
+  Plane,
 } from "lucide-react";
+import StatusText from "@/components/ui/StatusText";
+import { ChipTabs } from "@/components/ui/Chips";
+import { inputClass } from "@/components/ui/form";
 import { initialsOf } from "@/lib/sample-data";
 import { deptTint } from "@/lib/dept-tint";
 import {
@@ -29,7 +34,14 @@ import {
   type AttendanceRow,
 } from "@/lib/attendance";
 import { deleteAttendance } from "@/lib/attendance-actions";
-import AttendanceStatusBadge, { attendanceDot, attendanceLabel } from "./AttendanceStatusBadge";
+import AttendanceStatusBadge, { AttendanceStatusText, attendanceDot, attendanceLabel } from "./AttendanceStatusBadge";
+import ResponsiveList, { type Column } from "@/components/ui/ResponsiveList";
+import ListRow from "@/components/ui/ListRow";
+import EmptyState from "@/components/ui/EmptyState";
+import BottomSheet from "@/components/ui/BottomSheet";
+import LiveMessage from "@/components/ui/LiveMessage";
+import { buttonClass } from "@/components/ui/button";
+import ConfirmSheet, { type Confirmation } from "@/components/employees/ConfirmSheet";
 
 export type AttendanceEmployee = {
   id: string;
@@ -40,12 +52,18 @@ export type AttendanceEmployee = {
   department: string | null;
 };
 
+// An approved leave request (dates are inclusive "YYYY-MM-DD" strings).
+export type ApprovedLeave = { employeeId: string; type: string; startDate: string; endDate: string };
+
 // One line in the daily log: an employee + their record for the day (if any).
 type DayRow = { emp: AttendanceEmployee; rec: AttendanceRow | null; status: string };
 
 const STATUS_FILTERS = ["All", "Present", "Late", "Remote", "Absent", "No record"] as const;
 const PAGE_SIZES = [8, 16, 32];
-const CAPS = "text-[11px] font-bold uppercase tracking-[0.06em]";
+const CAPS = "text-eyebrow uppercase";
+// Small desktop controls inside the md+ table keep their compact look but get
+// an invisible 48px hit area on touch tablets (switched off from lg).
+const HIT = "relative before:absolute before:-inset-2 before:content-[''] lg:before:hidden";
 
 // Dates are "YYYY-MM-DD" strings; these helpers move between days safely.
 const parseDay = (s: string) => {
@@ -171,13 +189,59 @@ function HeatCell({ row, selected, future }: { row: DayRow | null; selected: boo
   return <span className={`${base} bg-surface-2 text-ink-faint`}>—</span>;
 }
 
+// "8:52 AM → 5:01 PM · 8h 9m", or "Still in" / "Didn't clock out".
+function TimeRange({ rec, isToday }: { rec: AttendanceRow | null; isToday: boolean }) {
+  if (!rec?.clockIn) return null;
+  return (
+    <>
+      {`${formatTime(rec.clockIn)} → `}
+      {rec.clockOut ? (
+        `${formatTime(rec.clockOut)} · ${formatDuration(minutesWorked(rec.clockIn, rec.clockOut))}`
+      ) : isToday ? (
+        <span className="text-good">Still in</span>
+      ) : (
+        <span className="text-warning">Didn&apos;t clock out</span>
+      )}
+    </>
+  );
+}
+
+// The pill at the right of a phone roster row (icon + words). Rows sit under a
+// group heading that already names the status ("On time", "Not checked in"),
+// so on-time rows show their check-in time and "not checked in" rows need no
+// pill at all, which leaves room for the person's name.
+function GroupPill({ row, leaveType }: { row: DayRow; leaveType?: string }) {
+  if (row.status === "No record" && !leaveType) return null;
+  if (row.status === "Present" && row.rec?.clockIn)
+    return (
+      <StatusText tone="good" variant="pill">
+        {formatTime(row.rec.clockIn)}
+      </StatusText>
+    );
+  if (leaveType)
+    return (
+      <StatusText tone="neutral" variant="pill" icon={Plane}>
+        {leaveType}
+      </StatusText>
+    );
+  if (row.status === "Late" && row.rec?.clockIn)
+    return (
+      <StatusText tone="pending" variant="pill">
+        +{minutesLate(row.rec.clockIn)}m late
+      </StatusText>
+    );
+  return <AttendanceStatusText status={row.status} variant="pill" />;
+}
+
 export default function AttendanceManager({
   records,
   employees,
+  leave = [],
   today,
 }: {
   records: AttendanceRow[];
   employees: AttendanceEmployee[];
+  leave?: ApprovedLeave[];
   today: string; // business-time-zone "YYYY-MM-DD", decided on the server
 }) {
   const router = useRouter();
@@ -188,6 +252,14 @@ export default function AttendanceManager({
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(8);
   const [isPending, startTransition] = useTransition();
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [message, setMessage] = useState("");
+  // Phones: tapping a roster row opens that person's day + week in a sheet.
+  const [detailId, setDetailId] = useState<string | null>(null);
+  // Phones: which groups are folded shut, and which show every row (not just the first 5).
+  const [collapsed, setCollapsed] = useState<string[]>([]);
+  const [showAll, setShowAll] = useState<string[]>([]);
+  const toggle = (list: string[], key: string) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
 
   // Fast lookup: "employeeId|date" → record.
   const byKey = new Map(records.map((r) => [`${r.employeeId}|${r.date}`, r]));
@@ -272,14 +344,24 @@ export default function AttendanceManager({
   }
 
   function handleDelete(row: AttendanceRow) {
-    if (!window.confirm(`Delete ${row.employeeName}'s attendance for ${formatDay(row.date)}?`)) return;
-    startTransition(async () => {
-      try {
-        await deleteAttendance(row.id);
-        router.refresh(); // reload from the server so every number stays correct
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : "Could not delete the record.");
-      }
+    setConfirmation({
+      title: "Delete this record?",
+      message: `Delete ${row.employeeName}'s attendance for ${formatDay(row.date)}? This can't be undone.`,
+      confirmLabel: "Delete record",
+      danger: true,
+      onConfirm: () => {
+        setDetailId(null);
+        setMessage("");
+        startTransition(async () => {
+          try {
+            await deleteAttendance(row.id);
+            router.refresh(); // reload from the server so every number stays correct
+            setMessage(`Deleted ${row.employeeName}'s record`);
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : "Could not delete the record.");
+          }
+        });
+      },
     });
   }
 
@@ -310,8 +392,359 @@ export default function AttendanceManager({
   const longDate = parseDay(date).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
   const pill = "h-10 rounded-full border border-border bg-surface px-4 text-label-md text-ink outline-none transition-colors hover:bg-bg focus:border-ink focus:ring-1 focus:ring-ink";
 
+  // ── Roster columns (md+ table). The week columns are built from `week`. ──
+  const columns: Column<DayRow>[] = [
+    {
+      key: "member",
+      header: "Team member",
+      className: "py-2.5!",
+      cell: ({ emp, status }) => (
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Avatar name={emp.name} department={emp.department} />
+            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface ${attendanceDot(status)}`} aria-hidden />
+          </div>
+          <div className="min-w-0 max-w-52">
+            <p className="truncate font-semibold text-ink">{emp.name}</p>
+            <p className="truncate text-body-sm text-ink-muted" title={emp.email}>
+              {emp.department ?? emp.role}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    ...week.map(
+      (w): Column<DayRow> => ({
+        key: w.day,
+        align: "center",
+        headerClassName: `w-20 px-1.5! ${w.day === date ? "bg-surface-2 text-ink" : ""}`,
+        className: `px-1.5! py-2.5! ${w.day === date ? "bg-surface-2" : ""}`,
+        header: (
+          <button
+            onClick={() => goTo(w.day)}
+            disabled={w.future}
+            aria-pressed={w.day === date}
+            className={`${HIT} inline-flex items-center gap-1 uppercase hover:text-ink disabled:cursor-default disabled:opacity-60`}
+          >
+            {weekdayShort(w.day)} {parseDay(w.day).getDate()}
+            {w.day === today && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden />}
+          </button>
+        ),
+        cell: ({ emp }) => <HeatCell row={rowFor(emp, w.day)} selected={w.day === date} future={w.future} />,
+      }),
+    ),
+    {
+      key: "selected",
+      header: "Selected day",
+      className: "py-2.5!",
+      cell: ({ rec, status }) => {
+        const late = status === "Late" && rec?.clockIn ? minutesLate(rec.clockIn) : 0;
+        return (
+          <>
+            <AttendanceStatusBadge status={status} note={late ? `+${late}m` : undefined} />
+            <p className="tnum mt-1 whitespace-nowrap text-body-sm text-ink-muted">
+              <TimeRange rec={rec} isToday={isToday} />
+            </p>
+          </>
+        );
+      },
+    },
+    {
+      key: "action",
+      header: "Action",
+      align: "right",
+      className: "py-2.5!",
+      cell: ({ emp, rec }) => (
+        <div className="flex justify-end">
+          {rec && (
+            <button
+              onClick={() => handleDelete(rec)}
+              disabled={isPending}
+              aria-label={`Delete ${emp.name}'s record`}
+              className={`${HIT} grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50`}
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const detail = detailId ? (dayRows.find((r) => r.emp.id === detailId) ?? null) : null;
+
+  // ── Phones & tablets (< lg): people grouped by how their day is going ──
+  // Approved leave covering the selected day, if any (dates compare as text).
+  const leaveOn = (empId: string) => leave.find((l) => l.employeeId === empId && l.startDate <= date && l.endDate >= date) ?? null;
+  const notInRow = (r: DayRow) => r.status === "No record" || r.status === "Absent";
+  const onLeave = dayRows.filter((r) => notInRow(r) && leaveOn(r.emp.id));
+  const matches = (r: DayRow) =>
+    !q || r.emp.name.toLowerCase().includes(q) || r.emp.email.toLowerCase().includes(q) || r.emp.role.toLowerCase().includes(q);
+  const byClockIn = (a: DayRow, b: DayRow) => (a.rec?.clockIn ?? "~").localeCompare(b.rec?.clockIn ?? "~") || a.emp.name.localeCompare(b.emp.name);
+  const searched = dayRows.filter(matches);
+  const groups = [
+    { key: "late", title: isToday ? "Running late" : "Late arrivals", dot: "bg-accent", head: "bg-accent-soft", rows: lateRows.filter(matches) },
+    { key: "ontime", title: "On time", dot: "bg-good", head: "bg-surface-2", rows: searched.filter((r) => r.status === "Present").sort(byClockIn) },
+    { key: "remote", title: "Working remote", dot: "bg-violet-300", head: "bg-surface-2", rows: searched.filter((r) => r.status === "Remote").sort(byClockIn) },
+    { key: "leave", title: "On approved leave", dot: "bg-ink-faint", head: "bg-surface-2", rows: searched.filter((r) => notInRow(r) && leaveOn(r.emp.id)) },
+    { key: "out", title: isToday ? "Not checked in" : "Not in", dot: "bg-critical", head: "bg-surface-2", rows: searched.filter((r) => notInRow(r) && !leaveOn(r.emp.id)) },
+  ].filter((g) => g.rows.length > 0);
+  // Department chips: how many people each department had on the roster that day.
+  const onRoster = employees.filter((e) => e.startedAt <= date);
+  const deptOptions = [
+    { key: "all", label: "All departments", count: onRoster.length },
+    ...departments.map((d) => ({ key: d, label: d, count: onRoster.filter((e) => e.department === d).length })),
+  ];
+
+  // Weekly punctuality card: shown in the desktop right rail and at the end of the phone view.
+  const punctuality = (
+    <section className="rounded-xl border border-border bg-surface p-4 lg:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-headline-md text-ink">Weekly punctuality</h2>
+          <p className="text-body-sm text-ink-muted">On-time check-in rate (cut-off {LATE_AFTER_LABEL})</p>
+        </div>
+        <div className="text-right">
+          <p className="tnum font-display text-metric-md text-ink">{weekRate !== null ? `${weekRate}%` : "—"}</p>
+          <p className={`${CAPS} text-ink-muted`}>Week avg</p>
+        </div>
+      </div>
+
+      {/* Five day columns: tighter gaps on phones so they fit a 360px screen. */}
+      <div className="mt-5 grid grid-cols-5 gap-1 rounded-lg border border-border bg-bg p-2 sm:gap-2 sm:p-3">
+        {week.map((w) => {
+          const selected = w.day === date;
+          return (
+            <button
+              key={w.day}
+              onClick={() => goTo(w.day)}
+              disabled={w.future}
+              aria-pressed={selected}
+              className={`flex min-w-0 flex-col items-center gap-1.5 rounded-md py-2 transition-colors disabled:cursor-default ${selected ? "bg-accent-soft" : "hover:bg-surface"}`}
+            >
+              <span className="tnum text-label-sm font-semibold text-ink">{w.future || w.rate === null ? "—" : `${w.rate}%`}</span>
+              <span className="flex h-28 w-6 items-end">
+                {w.future ? (
+                  <span className="block h-full w-full rounded-sm border border-dashed border-border-strong" />
+                ) : (
+                  <span
+                    className={`block w-full rounded-sm ${selected ? "bg-navy" : "bg-chart-3"}`}
+                    style={{ height: `${Math.max(w.rate ?? 0, 2)}%` }}
+                  />
+                )}
+              </span>
+              <span className="text-label-sm text-ink-muted">{w.day === today ? "Today" : weekdayShort(w.day)}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-body-sm">
+        <Timer className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
+        <span className="text-ink-muted">Avg arrival</span>
+        <span className="tnum font-semibold text-ink">{avgArrival !== null ? minutesLabel(avgArrival) : "—"}</span>
+        {avgArrival !== null && (
+          <span
+            className={`tnum ml-auto rounded-md px-2 py-1 text-label-sm ${
+              avgArrival <= LATE_AFTER_MINUTES ? "bg-tint-sky text-ink" : "bg-accent-soft text-accent-ink"
+            }`}
+          >
+            {avgArrival <= LATE_AFTER_MINUTES
+              ? `${LATE_AFTER_MINUTES - avgArrival}m before cut-off`
+              : `${avgArrival - LATE_AFTER_MINUTES}m after cut-off`}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+
   return (
-    <div className="space-y-6">
+    <div>
+      {/* ════ Phones & tablets (< lg): the mobile mockup — date card, department
+          chips, a navy headcount hero, then people grouped by status. ════ */}
+      <div className="space-y-5 lg:hidden">
+        <header className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className={`${CAPS} min-w-0 truncate text-ink-muted`}>
+              Operations <span className="text-ink-faint">/</span> <span className="text-ink">Attendance</span>
+            </p>
+            <button type="button" onClick={exportCsv} className={`${buttonClass("secondary")} px-4`}>
+              <Download className="h-4 w-4" aria-hidden />
+              Export
+            </button>
+          </div>
+          <div>
+            <h1 className="text-headline-lg text-ink [overflow-wrap:anywhere]">{isToday ? "Who’s in today." : `Who was in, ${formatDay(date)}.`}</h1>
+            <p className="mt-1 text-body-md text-ink-muted">
+              {isPending ? "Working…" : `Late after ${LATE_AFTER_LABEL} · times in Lagos time (WAT).`}
+            </p>
+          </div>
+
+          {/* Date card: previous day · tap the date to pick one · next day */}
+          <div className="flex items-center gap-1 rounded-xl border border-border bg-surface p-1">
+            <button onClick={() => goTo(addDays(date, -1))} aria-label="Previous day" className="grid size-tap shrink-0 place-items-center rounded-full text-ink hover:bg-surface-2">
+              <ChevronLeft className="h-5 w-5" aria-hidden />
+            </button>
+            <label className="relative flex min-h-tap min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 text-label-md font-semibold text-ink">
+              <CalendarDays className="h-4 w-4 shrink-0 text-accent-ink" aria-hidden />
+              {/* short date on phones (leaves room for the Today button), full date from sm */}
+              <span className="truncate sm:hidden">{formatDay(date)}</span>
+              <span className="hidden truncate sm:inline">{longDate}</span>
+              {/* the real date picker sits invisibly on top of the label */}
+              <input
+                type="date"
+                value={date}
+                max={today}
+                onChange={(e) => e.target.value && goTo(e.target.value)}
+                className="absolute inset-0 cursor-pointer opacity-0"
+                aria-label="Pick a date"
+              />
+            </label>
+            {!isToday && (
+              <button onClick={() => goTo(today)} className={`min-h-tap shrink-0 rounded-full bg-surface-2 px-3 ${CAPS} text-ink`}>
+                Today
+              </button>
+            )}
+            <button
+              onClick={() => goTo(addDays(date, 1))}
+              disabled={date >= today}
+              aria-label="Next day"
+              className="grid size-tap shrink-0 place-items-center rounded-full text-ink hover:bg-surface-2 disabled:opacity-30"
+            >
+              <ChevronRight className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+
+          <ChipTabs
+            label="Department"
+            options={deptOptions}
+            value={dept}
+            onChange={(d) => {
+              setDept(d);
+              setPage(0);
+            }}
+          />
+        </header>
+
+        {/* Navy headcount hero — every number comes from the selected day's records. */}
+        <section aria-label="Headcount status" className="rounded-xl bg-navy p-4 text-on-navy">
+          <div className="flex items-center justify-between gap-3">
+            <p className={`${CAPS} text-on-navy-muted`}>{isToday ? "Live headcount" : "Headcount"}</p>
+            <p className="tnum text-label-sm text-on-navy-muted">{pctOf(inOffice.length)}% in office</p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="min-w-0 p-1">
+              <p className="tnum font-display text-metric-lg">{c.Present}</p>
+              <p className="text-body-sm text-on-navy-muted">In office · on time</p>
+            </div>
+            {/* Late is the one that needs attention, so it gets the yellow box and jumps to its group. */}
+            {c.Late > 0 ? (
+              <a href="#att-group-late" className="min-w-0 rounded-lg border border-accent/40 bg-accent/15 p-3">
+                <p className="tnum flex items-center gap-2 font-display text-metric-lg text-[#f5c518]">
+                  {c.Late}
+                  <AlertTriangle className="h-5 w-5" aria-hidden />
+                </p>
+                <p className="text-body-sm font-semibold text-[#f5c518]">Late · avg {avgDelay} min</p>
+              </a>
+            ) : (
+              <div className="min-w-0 rounded-lg border border-navy-line bg-navy-2 p-3">
+                <p className="tnum font-display text-metric-lg">0</p>
+                <p className="text-body-sm text-on-navy-muted">Late</p>
+              </div>
+            )}
+            <div className="min-w-0 p-1">
+              <p className="tnum font-display text-metric-lg">{remote.length}</p>
+              <p className="text-body-sm text-on-navy-muted">Working remote</p>
+            </div>
+            <div className="min-w-0 p-1">
+              <p className="tnum font-display text-metric-lg">{onLeave.length}</p>
+              <p className="text-body-sm text-on-navy-muted">On approved leave</p>
+            </div>
+          </div>
+          <p className="mt-3 border-t border-navy-line pt-3 text-body-sm text-on-navy-muted">
+            {inOffice.length + remote.length} of {headcount} checked in{dept !== "all" ? ` in ${dept}` : ""}
+            {earliest !== null ? ` · first in ${minutesLabel(earliest)}` : ""}
+          </p>
+        </section>
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
+          <input
+            type="search"
+            autoComplete="off"
+            enterKeyHint="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, email, role…"
+            aria-label="Search employees"
+            className={`${inputClass} rounded-full pl-10`}
+          />
+        </div>
+
+        {/* People grouped by status. Each group folds shut, and long groups show 5 rows until expanded. */}
+        {groups.length === 0 ? (
+          <EmptyState icon={Clock} title="Nobody matches" description="Try another department, search or date." className="rounded-xl border border-border bg-surface" />
+        ) : (
+          groups.map((g) => {
+            const open = !collapsed.includes(g.key);
+            const all = showAll.includes(g.key);
+            const shown = all ? g.rows : g.rows.slice(0, 5);
+            return (
+              <section key={g.key} id={`att-group-${g.key}`} className="overflow-hidden rounded-xl border border-border bg-surface">
+                <h2>
+                  <button
+                    type="button"
+                    onClick={() => setCollapsed((l) => toggle(l, g.key))}
+                    aria-expanded={open}
+                    aria-controls={`att-list-${g.key}`}
+                    className={`flex min-h-tap w-full items-center gap-2.5 px-4 py-3 text-left ${g.head}`}
+                  >
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${g.dot}`} aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-headline-sm text-ink">{g.title}</span>
+                    <span className="tnum rounded-full bg-surface px-2 py-0.5 text-label-sm font-semibold text-ink">{g.rows.length}</span>
+                    <ChevronDown className={`h-5 w-5 shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+                  </button>
+                </h2>
+                {open && (
+                  <div id={`att-list-${g.key}`}>
+                    <ul className="divide-y divide-border px-4">
+                      {shown.map((r) => (
+                        <li key={r.emp.id} className="min-w-0">
+                          <ListRow
+                            onClick={() => setDetailId(r.emp.id)}
+                            label={`${r.emp.name}: show their day and week`}
+                            leading={<Avatar name={r.emp.name} department={r.emp.department} size="size-11" />}
+                            title={r.emp.name}
+                            subtitle={[r.emp.role, r.emp.department].filter(Boolean).join(" · ")}
+                            meta={r.rec?.clockIn && r.status !== "Present" ? `In ${formatTime(r.rec.clockIn)}` : undefined}
+                            trailing={<GroupPill row={r} leaveType={g.key === "leave" ? leaveOn(r.emp.id)?.type : undefined} />}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                    {g.rows.length > 5 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAll((l) => toggle(l, g.key))}
+                        aria-expanded={all}
+                        className="flex min-h-tap w-full items-center justify-center gap-1 border-t border-border text-label-md text-ink"
+                      >
+                        {all ? "Show fewer" : `View remaining ${g.rows.length - 5} ${g.rows.length - 5 === 1 ? "teammate" : "teammates"}`}
+                        <ChevronDown className={`h-4 w-4 ${all ? "rotate-180" : ""}`} aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          })
+        )}
+
+        {punctuality}
+      </div>
+
+      {/* ════ Desktop (lg+): the original layout ════ */}
+      <div className="hidden space-y-6 lg:block">
       {/* ── Editorial header ── */}
       <header className="flex flex-col justify-between gap-5 border-b border-border pb-6 xl:flex-row xl:items-end">
         <div className="min-w-0">
@@ -332,13 +765,11 @@ export default function AttendanceManager({
           {/* Date navigator */}
           <div className="flex h-10 items-center rounded-full border border-border bg-surface p-1">
             <button onClick={() => goTo(addDays(date, -1))} aria-label="Previous day" className="grid h-8 w-8 place-items-center rounded-full text-ink hover:bg-surface-2">
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" aria-hidden />
             </button>
             <label className="relative flex cursor-pointer items-center gap-2 px-2 text-label-md font-semibold text-ink">
-              <CalendarDays className="h-4 w-4 text-ink-muted" />
-              {/* full date on wider screens, short one on phones */}
-              <span className="hidden whitespace-nowrap sm:inline">{longDate}</span>
-              <span className="whitespace-nowrap sm:hidden">{formatDay(date)}</span>
+              <CalendarDays className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden />
+              <span className="whitespace-nowrap">{longDate}</span>
               {/* the real date picker sits invisibly on top of the label */}
               <input
                 type="date"
@@ -355,7 +786,7 @@ export default function AttendanceManager({
               aria-label="Next day"
               className="grid h-8 w-8 place-items-center rounded-full text-ink hover:bg-surface-2 disabled:opacity-30"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" aria-hidden />
             </button>
             <button
               onClick={() => goTo(today)}
@@ -368,7 +799,7 @@ export default function AttendanceManager({
 
           {/* Department ("squad") filter */}
           <div className="relative">
-            <Users className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <Users className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden />
             <select
               aria-label="Department"
               value={dept}
@@ -388,7 +819,7 @@ export default function AttendanceManager({
           </div>
 
           <button onClick={exportCsv} className={`${pill} inline-flex items-center gap-2`}>
-            <Download className="h-4 w-4" />
+            <Download className="h-4 w-4" aria-hidden />
             Export report
           </button>
         </div>
@@ -506,7 +937,7 @@ export default function AttendanceManager({
                 ["Absent", "bg-tint-rose"],
               ].map(([label, cls]) => (
                 <span key={label} className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-label-sm text-ink">
-                  <span className={`h-2.5 w-2.5 rounded-sm ${cls}`} />
+                  <span className={`h-2.5 w-2.5 rounded-sm ${cls}`} aria-hidden />
                   {label}
                 </span>
               ))}
@@ -515,7 +946,7 @@ export default function AttendanceManager({
 
           {/* Status chips + search */}
           <div className="flex flex-col gap-2 border-b border-border px-5 py-3 lg:flex-row lg:items-center">
-            <div className="flex flex-1 flex-wrap gap-1.5">
+            <div className="flex flex-1 flex-wrap gap-1.5" role="group" aria-label="Filter by status">
               {STATUS_FILTERS.map((s) => {
                 const active = statusFilter === s;
                 const count = s === "All" ? headcount : c[s] ?? 0;
@@ -528,7 +959,7 @@ export default function AttendanceManager({
                       active ? "bg-navy text-on-navy" : "border border-border bg-surface text-ink hover:bg-bg"
                     }`}
                   >
-                    {s !== "All" && <span className={`h-1.5 w-1.5 rounded-full ${attendanceDot(s)}`} />}
+                    {s !== "All" && <span className={`h-1.5 w-1.5 rounded-full ${attendanceDot(s)}`} aria-hidden />}
                     {s === "All" ? "All" : attendanceLabel(s)}
                     <span className={`tnum ${active ? "text-on-navy-muted" : "text-ink-muted"}`}>{count}</span>
                   </button>
@@ -536,8 +967,11 @@ export default function AttendanceManager({
               })}
             </div>
             <div className="relative lg:w-60">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
               <input
+                type="search"
+                autoComplete="off"
+                enterKeyHint="search"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -550,105 +984,34 @@ export default function AttendanceManager({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-[13px] leading-[18px]">
-              <thead>
-                <tr className={`border-b border-border bg-bg ${CAPS} text-ink-muted`}>
-                  <th className="px-5 py-3">Team member</th>
-                  {week.map((w) => (
-                    <th
-                      key={w.day}
-                      className={`w-20 px-1.5 py-3 text-center ${w.day === date ? "bg-surface-2 text-ink" : ""}`}
-                    >
-                      <button
-                        onClick={() => goTo(w.day)}
-                        disabled={w.future}
-                        className="inline-flex items-center gap-1 uppercase hover:text-ink disabled:cursor-default disabled:opacity-60"
-                      >
-                        {weekdayShort(w.day)} {parseDay(w.day).getDate()}
-                        {w.day === today && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
-                      </button>
-                    </th>
-                  ))}
-                  <th className="px-4 py-3">Selected day</th>
-                  <th className="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map(({ emp, rec, status }) => {
-                  const worked = minutesWorked(rec?.clockIn ?? null, rec?.clockOut ?? null);
-                  const stillIn = !!rec?.clockIn && !rec.clockOut;
-                  const late = status === "Late" && rec?.clockIn ? minutesLate(rec.clockIn) : 0;
-                  return (
-                    <tr key={emp.id} className={`border-b border-border last:border-0 hover:bg-bg ${status === "Late" ? "bg-accent-soft/40" : ""}`}>
-                      <td className="px-5 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
-                            <Avatar name={emp.name} department={emp.department} />
-                            <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface ${attendanceDot(status)}`} />
-                          </div>
-                          <div className="min-w-0 max-w-52">
-                            <p className="truncate font-semibold text-ink">{emp.name}</p>
-                            <p className="truncate text-body-sm text-ink-muted" title={emp.email}>
-                              {emp.department ?? emp.role}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      {week.map((w) => (
-                        <td key={w.day} className={`px-1.5 py-2.5 ${w.day === date ? "bg-surface-2" : ""}`}>
-                          <HeatCell row={rowFor(emp, w.day)} selected={w.day === date} future={w.future} />
-                        </td>
-                      ))}
-                      <td className="px-4 py-2.5">
-                        <AttendanceStatusBadge status={status} note={late ? `+${late}m` : undefined} />
-                        <p className="tnum mt-1 whitespace-nowrap text-body-sm text-ink-muted">
-                          {rec?.clockIn ? `${formatTime(rec.clockIn)} → ` : ""}
-                          {rec?.clockOut ? (
-                            `${formatTime(rec.clockOut)} · ${formatDuration(worked)}`
-                          ) : stillIn ? (
-                            isToday ? (
-                              <span className="text-good">Still in</span>
-                            ) : (
-                              <span className="text-warning">Didn&apos;t clock out</span>
-                            )
-                          ) : rec?.clockIn ? (
-                            "—"
-                          ) : null}
-                        </p>
-                      </td>
-                      <td className="px-5 py-2.5">
-                        <div className="flex justify-end">
-                          {rec && (
-                            <button
-                              onClick={() => handleDelete(rec)}
-                              disabled={isPending}
-                              aria-label={`Delete ${emp.name}'s record`}
-                              className="grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {visible.length === 0 && (
-              <div className="grid place-items-center py-16 text-center">
-                <div>
-                  <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-2">
-                    <Clock className="h-5 w-5 text-ink-faint" />
-                  </div>
-                  <p className="mt-3 text-headline-sm text-ink">Nobody matches</p>
-                  <p className="mt-1 text-body-md text-ink-muted">Try another filter or date.</p>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* The heatmap table (this whole block only shows from lg up; smaller
+              screens get the grouped lists above). It keeps its full width and
+              scrolls inside its card if the window is narrow. */}
+          <ResponsiveList
+            caption={`Attendance for ${longDate}`}
+            rows={visible}
+            getKey={(r) => r.emp.id}
+            columns={columns}
+            inset
+            tableClassName="[&_table]:min-w-[880px] [&_table]:text-body-sm [&_thead_tr]:bg-bg"
+            rowClassName={(r) => (r.status === "Late" ? "bg-accent-soft/40" : "")}
+            listClassName="px-4"
+            renderRow={(r) => {
+              const late = r.status === "Late" && r.rec?.clockIn ? minutesLate(r.rec.clockIn) : 0;
+              return (
+                <ListRow
+                  onClick={() => setDetailId(r.emp.id)}
+                  label={`${r.emp.name}, ${attendanceLabel(r.status)}. Show details`}
+                  leading={<Avatar name={r.emp.name} department={r.emp.department} size="size-10" />}
+                  title={r.emp.name}
+                  subtitle={r.emp.department ?? r.emp.role}
+                  meta={r.rec?.clockIn ? formatTime(r.rec.clockIn) : undefined}
+                  trailing={<AttendanceStatusText status={r.status} note={late ? `+${late}m` : undefined} />}
+                />
+              );
+            }}
+            empty={<EmptyState icon={Clock} title="Nobody matches" description="Try another filter or date." />}
+          />
 
           {/* Pagination */}
           <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-5 py-3 text-body-sm text-ink-muted sm:flex-row">
@@ -702,9 +1065,9 @@ export default function AttendanceManager({
           <section className="rounded-xl border border-border bg-surface">
             <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4">
               <h2 className="flex items-center gap-2 text-headline-md text-ink">
-                <AlarmClock className="h-5 w-5" /> {isToday ? "Running late today" : "Late arrivals"}
+                <AlarmClock className="h-5 w-5 shrink-0" aria-hidden /> {isToday ? "Running late today" : "Late arrivals"}
               </h2>
-              <span className="tnum rounded-full bg-accent-soft px-2.5 py-0.5 text-label-sm font-semibold text-accent-ink">
+              <span className="tnum shrink-0 whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-label-sm font-semibold text-accent-ink">
                 {c.Late} {c.Late === 1 ? "teammate" : "teammates"}
               </span>
             </div>
@@ -736,71 +1099,91 @@ export default function AttendanceManager({
                 onClick={() => showStatus("Late")}
                 className="w-full border-t border-border px-5 py-3 text-label-md text-ink transition-colors hover:bg-bg"
               >
-                Show all {lateRows.length} in the table
+                Show all {lateRows.length} in the roster
               </button>
             )}
           </section>
 
-          {/* Weekly punctuality */}
-          <section className="rounded-xl border border-border bg-surface p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-headline-md text-ink">Weekly punctuality</h2>
-                <p className="text-body-sm text-ink-muted">On-time check-in rate (cut-off {LATE_AFTER_LABEL})</p>
-              </div>
-              <div className="text-right">
-                <p className="tnum font-display text-metric-md text-ink">{weekRate !== null ? `${weekRate}%` : "—"}</p>
-                <p className={`${CAPS} text-ink-muted`}>Week avg</p>
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-5 gap-2 rounded-lg border border-border bg-bg p-3">
-              {week.map((w) => {
-                const selected = w.day === date;
-                return (
-                  <button
-                    key={w.day}
-                    onClick={() => goTo(w.day)}
-                    disabled={w.future}
-                    aria-pressed={selected}
-                    className={`flex flex-col items-center gap-1.5 rounded-md py-2 transition-colors disabled:cursor-default ${selected ? "bg-accent-soft" : "hover:bg-surface"}`}
-                  >
-                    <span className="tnum text-label-sm font-semibold text-ink">{w.future || w.rate === null ? "—" : `${w.rate}%`}</span>
-                    <span className="flex h-28 w-6 items-end">
-                      {w.future ? (
-                        <span className="block h-full w-full rounded-sm border border-dashed border-border-strong" />
-                      ) : (
-                        <span
-                          className={`block w-full rounded-sm ${selected ? "bg-navy" : "bg-chart-3"}`}
-                          style={{ height: `${Math.max(w.rate ?? 0, 2)}%` }}
-                        />
-                      )}
-                    </span>
-                    <span className="text-label-sm text-ink-muted">{w.day === today ? "Today" : weekdayShort(w.day)}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex items-center gap-3 text-body-sm">
-              <Timer className="h-4 w-4 shrink-0 text-ink-muted" />
-              <span className="text-ink-muted">Avg arrival</span>
-              <span className="tnum font-semibold text-ink">{avgArrival !== null ? minutesLabel(avgArrival) : "—"}</span>
-              {avgArrival !== null && (
-                <span
-                  className={`tnum ml-auto rounded-md px-2 py-1 text-label-sm ${
-                    avgArrival <= LATE_AFTER_MINUTES ? "bg-tint-sky text-ink" : "bg-accent-soft text-accent-ink"
-                  }`}
-                >
-                  {avgArrival <= LATE_AFTER_MINUTES
-                    ? `${LATE_AFTER_MINUTES - avgArrival}m before cut-off`
-                    : `${avgArrival - LATE_AFTER_MINUTES}m after cut-off`}
-                </span>
-              )}
-            </div>
-          </section>
+          {punctuality}
         </div>
       </div>
+      </div>
+
+      {/* One person's selected day + their week, with the delete action. */}
+      <BottomSheet
+        open={detail !== null}
+        onClose={() => setDetailId(null)}
+        eyebrow={detail ? (detail.emp.department ?? detail.emp.role) : undefined}
+        title={detail?.emp.name ?? ""}
+        footer={
+          <>
+            <button type="button" onClick={() => setDetailId(null)} className={`${buttonClass("secondary")} flex-1 md:flex-none`}>
+              Close
+            </button>
+            {detail?.rec && (
+              <button
+                type="button"
+                onClick={() => {
+                  // close this sheet first so the "are you sure?" sheet doesn't stack on top of it
+                  const rec = detail.rec!;
+                  setDetailId(null);
+                  handleDelete(rec);
+                }}
+                disabled={isPending}
+                className={`${buttonClass("danger")} flex-1 md:ml-auto md:flex-none`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden />
+                Delete record
+              </button>
+            )}
+          </>
+        }
+      >
+        {detail && (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-border bg-bg p-4">
+              <p className={`${CAPS} text-ink-muted`}>{formatDay(date)}</p>
+              <div className="mt-2">
+                <AttendanceStatusText
+                  status={detail.status}
+                  variant="pill"
+                  note={detail.status === "Late" && detail.rec?.clockIn ? `+${minutesLate(detail.rec.clockIn)}m` : undefined}
+                />
+              </div>
+              <p className="tnum mt-2 text-body-md text-ink">
+                {detail.rec?.clockIn ? <TimeRange rec={detail.rec} isToday={isToday} /> : "No check-in"}
+              </p>
+            </div>
+            <div>
+              <h3 className={`${CAPS} mb-1 text-ink-muted`}>Week of {formatDay(monday)}</h3>
+              <ul className="divide-y divide-border">
+                {week.map((w) => {
+                  const r = rowFor(detail.emp, w.day);
+                  const late = r?.status === "Late" && r.rec?.clockIn ? minutesLate(r.rec.clockIn) : 0;
+                  return (
+                    <li key={w.day} className={`flex min-h-tap items-center justify-between gap-3 py-2 ${w.day === date ? "font-semibold" : ""}`}>
+                      <span className="text-body-md text-ink">{formatDay(w.day)}</span>
+                      <span className="flex min-w-0 items-center gap-3">
+                        {r?.rec?.clockIn && <span className="tnum text-body-sm text-ink-muted">{formatTime(r.rec.clockIn)}</span>}
+                        {w.future ? (
+                          <span className="text-body-sm text-ink-faint">Upcoming</span>
+                        ) : r ? (
+                          <AttendanceStatusText status={r.status} note={late ? `+${late}m` : undefined} />
+                        ) : (
+                          <span className="text-body-sm text-ink-faint">Not yet employed</span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        )}
+      </BottomSheet>
+
+      <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} />
+      <LiveMessage message={message} />
     </div>
   );
 }

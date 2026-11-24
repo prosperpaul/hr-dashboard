@@ -1,28 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceDot } from "recharts";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 // One month of history: headcount at month end + people who joined that month.
 export type HeadcountPoint = { month: string; label: string; headcount: number; hires: number };
 
 const PERIODS = [3, 6, 12] as const;
 
-// Hover tooltip: a white "overlay" card (Level 3 in the design system).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ChartTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const p: HeadcountPoint = payload[0].payload;
-  return (
-    <div className="rounded-lg border border-border bg-surface px-3 py-2 text-ink shadow-popover">
-      <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{p.label}</p>
-      <p className="mt-0.5 text-body-sm text-ink-muted">
-        <span className="tnum font-display text-[17px] font-semibold text-ink">{p.headcount}</span> people
-        {p.hires > 0 && <span className="text-accent-ink"> · +{p.hires} joined</span>}
-      </p>
-    </div>
-  );
-}
+// The chart (and the heavy recharts library) loads separately, after the
+// page is on screen. Until then a soft placeholder fills the same box, so
+// nothing jumps (the `!` makes its fill navy instead of the usual grey).
+// `ssr: false` = don't try to draw it on the server.
+const HeroChart = dynamic(() => import("./HeroChart"), {
+  ssr: false,
+  loading: () => <Skeleton className="h-full w-full bg-navy-2!" />,
+});
 
 /*
   The navy "hero" band at the top of the Overview.
@@ -35,6 +30,9 @@ function ChartTooltip({ active, payload }: any) {
 
   The white tag on the chart marks the month with the most new joiners
   in the visible window — calculated from real start dates, not made up.
+
+  Phones: tighter padding, a slightly smaller number and a shorter chart so
+  the band doesn't eat the whole first screen.
 */
 export default function HeroBand({
   total,
@@ -60,18 +58,18 @@ export default function HeroBand({
   const last = shown[shown.length - 1];
 
   return (
-    <section className="rounded-xl bg-navy p-6 text-on-navy lg:p-10">
-      <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12">
+    <section className="rounded-xl bg-navy p-5 text-on-navy md:p-6 lg:p-10">
+      <div className="grid grid-cols-1 items-center gap-6 md:gap-10 lg:grid-cols-12">
         {/* ── Left: the big number ── */}
-        <div className="space-y-6 lg:col-span-5">
+        <div className="space-y-4 md:space-y-6 lg:col-span-5">
           <div className="space-y-2">
-            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em] text-accent">
+            <p className="flex items-center gap-2 text-eyebrow uppercase text-accent">
               <span className="h-2 w-2 rounded-full bg-accent" />
               Total active personnel
             </p>
-            <p className="flex items-baseline gap-2">
-              <span className="tnum font-display text-[56px] font-bold leading-none tracking-[-0.03em] md:text-[64px]">{total}</span>
-              <span className="font-display text-[56px] font-bold leading-none tracking-[-0.03em] md:text-[64px]">{total === 1 ? "person" : "people"}</span>
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className="tnum font-display text-metric-lg font-bold leading-none tracking-[-0.03em] sm:text-[56px] md:text-[64px]">{total}</span>
+              <span className="font-display text-metric-lg font-bold leading-none tracking-[-0.03em] sm:text-[56px] md:text-[64px]">{total === 1 ? "person" : "people"}</span>
             </p>
             <p className="text-body-md text-on-navy-muted">
               Across {teams} {teams === 1 ? "team" : "teams"} ·{" "}
@@ -81,10 +79,10 @@ export default function HeroBand({
             </p>
           </div>
 
-          {/* Year-on-year box */}
-          <div className="space-y-1 rounded-lg bg-navy-2 p-4">
+          {/* Year-on-year box (tablet/desktop; phones get a one-line version under the chart) */}
+          <div className="hidden space-y-1 rounded-lg bg-navy-2 p-4 md:block">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-accent">Year on year</span>
+              <span className="text-eyebrow uppercase text-accent">Year on year</span>
               <span className="tnum text-body-md font-semibold">
                 {yearAgo} → {total}
               </span>
@@ -107,13 +105,15 @@ export default function HeroBand({
         </div>
 
         {/* ── Right: trajectory chart ── */}
-        <div className="space-y-4 lg:col-span-7">
+        <div className="min-w-0 space-y-3 md:space-y-4 lg:col-span-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-on-navy-muted">Trajectory</p>
-              <h2 className="font-display text-[18px] font-semibold">{months}-Month Headcount</h2>
+            <div className="hidden md:block">
+              <p className="text-eyebrow uppercase text-on-navy-muted">Trajectory</p>
+              <h2 className="font-display text-headline-sm">{months}-Month Headcount</h2>
             </div>
-            <div className="inline-flex items-center gap-1 rounded-full bg-navy-2 p-1" role="group" aria-label="Time period">
+            {/* Period switch: 48px-tall pills on phones/tablets (thumb), compact on desktop.
+                On phones the heading beside it is hidden, so the pills sit on the right. */}
+            <div className="ml-auto inline-flex items-center gap-1 rounded-full bg-navy-2 p-1" role="group" aria-label="Time period">
               {PERIODS.map((m) => (
                 <button
                   key={m}
@@ -121,7 +121,7 @@ export default function HeroBand({
                   onClick={() => setMonths(m)}
                   aria-pressed={months === m}
                   className={[
-                    "rounded-full px-3 py-1 text-[11px] font-bold tracking-[0.06em] transition-colors",
+                    "min-h-tap min-w-tap rounded-full px-3 text-eyebrow transition-colors lg:min-h-0 lg:min-w-0 lg:py-1",
                     months === m ? "bg-accent text-on-accent" : "text-on-navy-muted hover:text-on-navy",
                   ].join(" ")}
                 >
@@ -131,69 +131,18 @@ export default function HeroBand({
             </div>
           </div>
 
-          <div className="h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={shown} margin={{ top: 30, right: 12, bottom: 0, left: 12 }}>
-                <defs>
-                  <linearGradient id="heroFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f5c518" stopOpacity={0.22} />
-                    <stop offset="100%" stopColor="#f5c518" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="month"
-                  tickLine={false}
-                  axisLine={false}
-                  interval="preserveStartEnd"
-                  tick={{ fill: "var(--color-on-navy-muted)", fontSize: 12 }}
-                  dy={8}
-                />
-                <YAxis hide domain={["dataMin - 1", "dataMax + 1"]} />
-                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgb(255 255 255 / 0.2)", strokeWidth: 1 }} />
-                <Area
-                  type="monotone"
-                  dataKey="headcount"
-                  stroke="#f5c518"
-                  strokeWidth={2.5}
-                  fill="url(#heroFill)"
-                  dot={{ r: 3, fill: "var(--color-navy)", stroke: "#f5c518", strokeWidth: 2 }}
-                  activeDot={{ r: 5, fill: "#f5c518", stroke: "var(--color-navy)", strokeWidth: 2 }}
-                  isAnimationActive={false}
-                />
-                {peak && (
-                  <ReferenceDot
-                    x={peak.month}
-                    y={peak.headcount}
-                    r={0}
-                    label={({ viewBox }: { viewBox?: { x?: number; y?: number } }) => {
-                      const text = `${peak.hires} joined in ${peak.month}`;
-                      const w = text.length * 6.6 + 16;
-                      const x = (viewBox?.x ?? 0) - w / 2;
-                      const y = (viewBox?.y ?? 0) - 30;
-                      return (
-                        <g>
-                          <rect x={x} y={y} width={w} height={20} rx={3} fill="#ffffff" />
-                          <text
-                            x={x + w / 2}
-                            y={y + 14}
-                            textAnchor="middle"
-                            fill="#101b3a"
-                            fontSize={11}
-                            fontWeight={700}
-                            letterSpacing="0.04em"
-                          >
-                            {text}
-                          </text>
-                        </g>
-                      );
-                    }}
-                  />
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-48 min-h-48 w-full md:h-56">
+            <HeroChart data={shown} peak={peak} />
           </div>
+          {/* Phones: the year-on-year change as one short line (mobile mockup) */}
+          <p className="flex items-center gap-2 text-body-md text-on-navy md:hidden">
+            {yoyDiff >= 0 ? <TrendingUp className="h-4 w-4 text-accent" aria-hidden /> : <TrendingDown className="h-4 w-4 text-accent" aria-hidden />}
+            {yoyDiff === 0
+              ? "Same size as a year ago"
+              : `${yoyDiff > 0 ? "Up" : "Down"} ${yoyPct !== null ? `${Math.abs(yoyPct)}%` : Math.abs(yoyDiff)} on a year ago (${yearAgo} → ${total})`}
+          </p>
           {last && (
-            <p className="text-right text-body-sm text-on-navy-muted">
+            <p className="hidden text-right text-body-sm text-on-navy-muted md:block">
               <span className="font-semibold text-on-navy">
                 {last.label} ({last.headcount})
               </span>

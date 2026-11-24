@@ -1,13 +1,19 @@
-import { Loader2 } from "lucide-react";
+import { Skeleton, HeaderSkeleton, StatsSkeleton, ListSkeleton } from "@/components/ui/Skeleton";
 
-// Shown INSTANTLY while any dashboard page fetches its data from the database.
-// Next.js swaps this for the real page as soon as it's ready. Kept deliberately
-// obvious (a visible accent spinner) so it never looks like a blank screen.
+// Overview placeholder while its data loads: header, the navy hero band,
+// the stat strip and a list — the same shape as the real page.
 export default function DashboardLoading() {
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
-      <Loader2 className="h-8 w-8 animate-spin text-accent-ink" />
-      <p className="text-sm text-ink-muted">Loading…</p>
+    <div role="status" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <HeaderSkeleton />
+      <Skeleton className="h-72 w-full rounded-xl md:h-80" />
+      <div className="mt-6">
+        <StatsSkeleton />
+      </div>
+      <div className="mt-6">
+        <ListSkeleton rows={4} />
+      </div>
     </div>
   );
 }

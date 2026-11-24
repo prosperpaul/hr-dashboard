@@ -18,6 +18,7 @@
   --color-bg: #f7f7f5;          /* Level 0: warm unbleached paper */
   --color-surface: #ffffff;     /* Level 1: cards, top bar, inputs */
   --color-surface-2: #f4f4f2;   /* hover rows, quiet fills */
+  --color-sunken: #efefea;      /* recessed wells: inputs, search pills, tracks */
 
   /* Hairline rules */
   --color-border: #e2e4e9;
@@ -119,6 +120,57 @@
   /* Elevation: flat cards; only overlays get a soft offset shadow */
   --shadow-popover: 0 4px 12px rgb(16 27 58 / 0.08);
   --shadow-modal: 0 12px 32px rgb(16 27 58 / 0.16);
+
+  /*
+    Small all-caps "eyebrow" label above headings and stats
+    (use: `text-eyebrow uppercase`).
+  */
+  --text-eyebrow: 11px;
+  --text-eyebrow--line-height: 14px;
+  --text-eyebrow--letter-spacing: 0.06em;
+  --text-eyebrow--font-weight: 700;
+
+  /*
+    Layout sizes as tokens, so pages never hard-code pixels.
+    Tailwind turns each --spacing-* into h-/w-/p-/m- classes,
+    e.g. min-h-tap, h-tabbar, px-gutter.
+  */
+  --spacing-tap: 3rem;        /* 48px — smallest comfortable finger target */
+  --spacing-tabbar: 4rem;     /* phone bottom tab bar (plus the safe area) */
+  --spacing-topbar: 4rem;     /* top bar height */
+  --spacing-sidebar: 16rem;   /* desktop sidebar width */
+  --spacing-gutter: 1rem;     /* phone side margin */
+  --container-page: 1440px;   /* widest the content column grows (max-w-page) */
+}
+
+/*
+  Phones & tablets ("Studio People Ops" mobile system): cards and sheets get
+  softer 12px corners (desktop keeps its crisp 6px). Inner wells stay 6px
+  (rounded-lg), so the corners nest neatly.
+*/
+@media (width < 64rem) {
+  :root {
+    --radius-xl: 0.75rem;
+    --radius-2xl: 0.75rem;
+  }
+}
+
+/*
+  Safe-area helpers: on phones with a home bar / notch, env(safe-area-inset-*)
+  is the strip the system keeps for itself. These add it to our padding so the
+  tab bar and sheets never sit under it. (Needs viewport-fit=cover, set in
+  app/layout.tsx.)
+*/
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pb-tabbar-safe {
+  /* room for the fixed tab bar + home bar + a little breathing space */
+  padding-bottom: calc(var(--spacing-tabbar) + env(safe-area-inset-bottom) + 1.5rem);
+}
+@utility bottom-tabbar-safe {
+  /* for things that float above the tab bar (e.g. sticky form actions) */
+  bottom: calc(var(--spacing-tabbar) + env(safe-area-inset-bottom));
 }
 
 /*
@@ -144,6 +196,7 @@
   --color-bg: #0a1128;
   --color-surface: #101b3a;
   --color-surface-2: #17244a;
+  --color-sunken: #0c1530;
   --color-border: #243159;
   --color-border-strong: #33427a;
 
@@ -182,18 +235,9 @@
 }
 
 /*
-  Animations for the mobile menu. Used with Tailwind's arbitrary
-  `animate-[name_duration_easing]` classes behind `motion-safe:`, so people
-  who turn on "reduce motion" on their phone get no movement.
+  Shared animations, used with Tailwind's `animate-[name_duration_easing]`.
+  The reduced-motion rule below makes all of them instant when asked.
 */
-@keyframes drawer-in {
-  from { transform: translateX(-104%); }
-  to { transform: translateX(0); }
-}
-@keyframes drawer-out {
-  from { transform: translateX(0); }
-  to { transform: translateX(-104%); }
-}
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -202,9 +246,46 @@
   from { opacity: 1; }
   to { opacity: 0; }
 }
-@keyframes tile-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.96); }
-  to { opacity: 1; transform: none; }
+
+/* Bottom sheet slide-up / slide-down */
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes sheet-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+/* Skeleton shimmer (a gentle pulse) */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+/*
+  Respect "reduce motion": if the phone/computer asks for less movement,
+  every animation and transition finishes instantly.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+  iPhones zoom the whole page when you tap a form field whose text is
+  smaller than 16px. So on phones every text field uses 16px. (This sits
+  outside Tailwind's layers, so it wins over text-body-md on inputs.)
+*/
+@media (width < 48rem) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Light paper is the default look. */
@@ -239,4 +320,14 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-ink);
   outline-offset: 2px;
+}
+
+/* Jump links (#roster etc.) stop below the sticky top bar, not under it. */
+[id] {
+  scroll-margin-top: calc(var(--spacing-topbar) + 1rem);
+}
+
+/* Media never overflows its column. */
+img, svg, video, canvas {
+  max-width: 100%;
 }

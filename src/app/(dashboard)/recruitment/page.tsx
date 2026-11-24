@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import AccessDenied from "@/components/ui/AccessDenied";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageRecruitment } from "@/lib/permissions";
@@ -8,9 +8,18 @@ import RecruitmentManager from "@/components/recruitment/RecruitmentManager";
 export default async function RecruitmentPage() {
   const session = await auth();
 
-  // Candidate data is sensitive — only Admin/HR/Manager. Others go home.
+  // Candidate data is sensitive — only Admin/HR/Manager. Others see an
+  // explanation (returned BEFORE any query runs, so no candidate data loads).
   if (!canManageRecruitment(session?.user?.role)) {
-    redirect("/");
+    return (
+      <AccessDenied
+        role={session?.user?.role}
+        required="Admin, HR or Manager"
+        audience="Admin, HR and Managers"
+        section="Recruitment"
+        reason="Candidate details are kept to the people who hire."
+      />
+    );
   }
 
   const [jobRecords, departments] = await Promise.all([

@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Award, CheckCircle2 } from "lucide-react";
+import { Award, CheckCircle2, Send } from "lucide-react";
 import { ratingLabel, type ReviewRow } from "@/lib/performance";
 import { acknowledgeReview } from "@/lib/performance-actions";
 import Stars from "./Stars";
 import Avatar from "./Avatar";
+import EmptyState from "@/components/ui/EmptyState";
+import StatusText from "@/components/ui/StatusText";
+import { buttonClass } from "@/components/ui/button";
 
 /*
   Self-service view: the reviews your manager has SHARED with you
@@ -41,12 +44,12 @@ export default function MyReviews({ initialReviews }: { initialReviews: ReviewRo
   return (
     <div className="space-y-6">
       <section className="space-y-2 border-b border-border pb-6">
-        <p className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+        <p className="flex flex-wrap items-center gap-2 text-eyebrow uppercase text-ink-muted">
           <span>Performance</span>
           <span className="h-1 w-1 rounded-full bg-accent" />
           <span>My reviews</span>
         </p>
-        <h1 className="text-headline-lg text-ink md:text-headline-xl">{headline}</h1>
+        <h1 className="text-headline-lg text-ink [overflow-wrap:anywhere] md:text-headline-xl">{headline}</h1>
         <p className="max-w-2xl text-body-md text-ink-muted">
           {isPending ? "Working…" : "Reviews your manager has shared with you. Read them, then acknowledge to confirm you've seen them."}
         </p>
@@ -70,41 +73,34 @@ export default function MyReviews({ initialReviews }: { initialReviews: ReviewRo
       </section>
 
       {list.length === 0 ? (
-        <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
-          <div className="max-w-sm">
-            <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-accent-soft">
-              <Award className="h-5 w-5 text-accent-ink" />
-            </div>
-            <p className="mt-3 text-headline-sm text-ink">No reviews yet</p>
-            <p className="mt-1 text-body-md text-ink-muted">When your manager shares a review, it&apos;ll appear here.</p>
-          </div>
+        <div className="rounded-xl border border-border bg-surface">
+          <EmptyState icon={Award} title="No reviews yet" description="When your manager shares a review, it'll appear here." />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {list.map((r) => (
             <article
               key={r.id}
-              className={`flex flex-col rounded-xl border bg-surface p-5 ${r.status === "Submitted" ? "border-accent" : "border-border"}`}
+              className={`flex min-w-0 flex-col rounded-xl border bg-surface p-4 sm:p-5 ${r.status === "Submitted" ? "border-accent" : "border-border"}`}
             >
               <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Review cycle</p>
+                  <p className="text-eyebrow uppercase text-ink-muted">Review cycle</p>
                   <p className="text-headline-md text-ink">{r.period}</p>
-                  <p className="mt-1 flex items-center gap-2 text-body-sm text-ink-muted">
+                  <p className="mt-1 flex min-w-0 items-center gap-2 text-body-sm text-ink-muted">
                     <Avatar name={r.reviewerName} department={null} size={22} />
-                    Reviewed by {r.reviewerName}
+                    <span className="truncate">Reviewed by {r.reviewerName}</span>
                   </p>
                 </div>
+                {/* Status as icon + words (never colour alone). */}
                 {r.status === "Acknowledged" ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-good/15 px-2.5 py-0.5 text-label-sm font-semibold text-good">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  <StatusText tone="good" variant="pill" className="shrink-0 text-label-sm">
                     Acknowledged
-                  </span>
+                  </StatusText>
                 ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-0.5 text-label-sm font-semibold text-accent-ink">
-                    <span className="h-1.5 w-1.5 rounded-full bg-accent ring-1 ring-ink/30" />
+                  <StatusText tone="pending" icon={Send} variant="pill" className="shrink-0 text-label-sm">
                     Shared with you
-                  </span>
+                  </StatusText>
                 )}
               </div>
 
@@ -118,14 +114,14 @@ export default function MyReviews({ initialReviews }: { initialReviews: ReviewRo
 
               {r.strengths && (
                 <div className="mt-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Strengths</p>
-                  <p className="mt-1 text-body-md italic text-ink">&ldquo;{r.strengths}&rdquo;</p>
+                  <p className="text-eyebrow uppercase text-ink-muted">Strengths</p>
+                  <p className="mt-1 text-body-md italic text-ink [overflow-wrap:anywhere]">&ldquo;{r.strengths}&rdquo;</p>
                 </div>
               )}
               {r.goals && (
                 <div className="mt-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Goals</p>
-                  <p className="mt-1 text-body-md text-ink-muted">{r.goals}</p>
+                  <p className="text-eyebrow uppercase text-ink-muted">Goals</p>
+                  <p className="mt-1 text-body-md text-ink-muted [overflow-wrap:anywhere]">{r.goals}</p>
                 </div>
               )}
 
@@ -134,9 +130,9 @@ export default function MyReviews({ initialReviews }: { initialReviews: ReviewRo
                   <button
                     onClick={() => handleAcknowledge(r)}
                     disabled={isPending}
-                    className="flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
+                    className={`${buttonClass("primary")} w-full sm:w-auto`}
                   >
-                    <CheckCircle2 className="h-4 w-4" />
+                    <CheckCircle2 className="h-4 w-4" aria-hidden />
                     Acknowledge review
                   </button>
                 </div>

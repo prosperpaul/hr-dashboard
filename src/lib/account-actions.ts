@@ -4,11 +4,15 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { isDemoUser, DEMO_LOCKED_MESSAGE } from "@/lib/demo";
 
 // Returns the current user's id, or throws if not signed in.
+// Shared demo accounts can't change their own name/password (so one visitor
+// can't lock the next one out of the public demo).
 async function requireUserId(): Promise<string> {
   const session = await auth();
   if (!session?.user?.id) throw new Error("You must be signed in.");
+  if (isDemoUser(session.user.email)) throw new Error(DEMO_LOCKED_MESSAGE);
   return session.user.id;
 }
 

@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import AccessDenied from "@/components/ui/AccessDenied";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageUsers } from "@/lib/permissions";
@@ -9,14 +9,16 @@ import type { UserRow } from "@/lib/user-actions";
 /*
   The user-management page. Runs on the SERVER.
 
-  Only Admins may see it — anyone else is redirected away. (proxy.ts already
+  Only Admins may see it — anyone else gets an "access denied" screen. (proxy.ts already
   requires login; this adds the role check for this specific page.)
 */
 export default async function UsersPage() {
   const session = await auth();
 
+  // Not an Admin → explain why instead of silently bouncing them home.
+  // We return BEFORE any query runs, so no account data is ever loaded.
   if (!canManageUsers(session?.user?.role)) {
-    redirect("/"); // not an Admin → send back to the overview
+    return <AccessDenied role={session?.user?.role} required="Admin" audience="Admins" section="User accounts" />;
   }
 
   // Public demo visitors only see the shared demo logins — never real

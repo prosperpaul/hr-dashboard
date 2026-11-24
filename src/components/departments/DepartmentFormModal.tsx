@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
 import type { DepartmentRow, DepartmentInput } from "@/lib/department-actions";
+import BottomSheet from "@/components/ui/BottomSheet";
+import { buttonClass } from "@/components/ui/button";
+import { Field, FormError, inputClass, textareaClass } from "@/components/ui/form";
 
 const emptyForm = { name: "", description: "" };
+const FORM_ID = "department-form";
 
 export default function DepartmentFormModal({
   open,
@@ -36,15 +39,6 @@ export default function DepartmentFormModal({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   function update(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -61,80 +55,51 @@ export default function DepartmentFormModal({
     );
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
-
+  // A bottom sheet on phones, a centred dialog on desktop. Escape, the
+  // backdrop and the focus trap are handled by BottomSheet. The buttons
+  // live in its sticky footer (outside the <form>), so the submit button
+  // points back at the form with form={FORM_ID}.
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-navy/45" onClick={onClose} />
-
-      <div role="dialog" aria-modal="true" className="relative flex h-full w-full max-w-md flex-col border-l border-border bg-surface shadow-modal">
-        {/* Header: caps eyebrow + title, close button on the right */}
-        <div className="flex items-start justify-between border-b border-border px-6 py-5">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Department atlas</p>
-            <h2 className="mt-1 text-headline-md text-ink">
-              {editing ? `Edit ${editing.name}` : "Add a department"}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-9 w-9 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <X className="h-4 w-4" />
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      eyebrow="Department atlas"
+      title={editing ? `Edit ${editing.name}` : "Add a department"}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={`${buttonClass("secondary")} flex-1 md:ml-auto md:flex-none`}>
+            Cancel
           </button>
-        </div>
+          <button type="submit" form={FORM_ID} className={`${buttonClass("primary")} flex-1 md:flex-none`}>
+            {editing ? "Save changes" : "Add department"}
+          </button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-5">
+        <Field label="Name" required>
+          <input
+            data-autofocus
+            className={inputClass}
+            value={form.name}
+            onChange={(e) => update("name", e.target.value)}
+            placeholder="e.g. Engineering"
+            autoComplete="off"
+            enterKeyHint="next"
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex-1 space-y-5 p-6">
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Name</span>
-              <input
-                className={inputClass}
-                value={form.name}
-                onChange={(e) => update("name", e.target.value)}
-                placeholder="e.g. Engineering"
-              />
-            </label>
+        <Field label="Description" hint="Optional">
+          <textarea
+            className={`${textareaClass} resize-y`}
+            value={form.description}
+            onChange={(e) => update("description", e.target.value)}
+            placeholder="What does this team do?"
+          />
+        </Field>
 
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
-                Description <span className="text-ink-faint">(optional)</span>
-              </span>
-              <textarea
-                className={`${inputClass} min-h-24 resize-y`}
-                value={form.description}
-                onChange={(e) => update("description", e.target.value)}
-                placeholder="What does this team do?"
-              />
-            </label>
-
-            {error && (
-              <p role="alert" className="rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 border-t border-border bg-bg px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-surface-2"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="h-10 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
-            >
-              {editing ? "Save changes" : "Add department"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {error && <FormError>{error}</FormError>}
+      </form>
+    </BottomSheet>
   );
 }

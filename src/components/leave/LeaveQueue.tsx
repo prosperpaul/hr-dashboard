@@ -3,6 +3,7 @@
 import { CalendarDays, AlertTriangle, CheckCircle2, Trash2, Info } from "lucide-react";
 import { ALLOWANCE_TYPES, formatLeaveRange, leaveStyle, type LeaveRow } from "@/lib/leave";
 import Avatar from "./Avatar";
+import { overlapsFor } from "./LeaveRequestCard";
 
 /*
   "Waiting for approval" — the right-hand rail of PENDING requests.
@@ -39,30 +40,11 @@ export default function LeaveQueue({
   const list = [...pending].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const urgent = list.filter((r) => r.startDate <= weekAhead).length;
 
-  // Other people in the same department who are off during this request.
-  const overlapsFor = (r: LeaveRow) =>
-    r.department
-      ? [
-          ...new Set(
-            allRequests
-              .filter(
-                (o) =>
-                  o.employeeId !== r.employeeId &&
-                  o.department === r.department &&
-                  o.status !== "Rejected" &&
-                  o.startDate <= r.endDate &&
-                  o.endDate >= r.startDate,
-              )
-              .map((o) => o.employeeName),
-          ),
-        ]
-      : [];
-
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-surface">
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-bg px-5 py-4">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-bg px-4 py-4 md:px-5">
         <h2 className="flex items-center gap-2 text-headline-sm text-ink">
-          <span className={`h-2.5 w-2.5 rounded-full ${list.length ? "bg-critical" : "bg-good"}`} />
+          <span aria-hidden className={`h-2.5 w-2.5 rounded-full ${list.length ? "bg-critical" : "bg-good"}`} />
           {isSelf ? "Your pending requests" : "Waiting for approval"}
         </h2>
         {urgent > 0 ? (
@@ -72,14 +54,16 @@ export default function LeaveQueue({
         )}
       </div>
 
-      <div className="max-h-[760px] divide-y divide-border overflow-y-auto">
+      {/* The list only scrolls inside its own box from lg up (where it's a side
+          rail). On phones the page scrolls instead: no scroll-inside-scroll. */}
+      <div className="divide-y divide-border lg:max-h-[760px] lg:overflow-y-auto">
         {list.map((r) => {
           const bal = ALLOWANCE_TYPES.includes(r.type) ? remainingFor(r.employeeId) : null;
-          const overlaps = canManage ? overlapsFor(r) : [];
+          const overlaps = canManage ? overlapsFor(r, allRequests) : [];
           const startsSoon = r.startDate <= weekAhead;
           const late = r.startDate < today; // asked for after the leave already started
           return (
-            <article key={r.id} className="p-5">
+            <article key={r.id} className="p-4 md:p-5">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={r.employeeName} department={r.department} size={36} />
@@ -92,7 +76,7 @@ export default function LeaveQueue({
               </div>
 
               <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-body-md text-ink">
-                <CalendarDays className="h-4 w-4 text-ink-muted" />
+                <CalendarDays className="h-4 w-4 text-ink-muted" aria-hidden />
                 <span className="font-semibold">{formatLeaveRange(r.startDate, r.endDate)}</span>
                 <span className="tnum text-ink-muted">
                   · {r.days} {r.days === 1 ? "day" : "days"}
@@ -110,7 +94,7 @@ export default function LeaveQueue({
               {canManage &&
                 (overlaps.length > 0 ? (
                   <div className="mt-3 flex gap-2 rounded-md border border-critical/30 bg-critical/10 p-3 text-body-sm text-critical">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                     <p>
                       <span className="font-bold">Coverage warning:</span> {overlaps.length} {overlaps.length === 1 ? "other" : "others"} in{" "}
                       {r.department} {overlaps.length === 1 ? "is" : "are"} off at the same time ({overlaps.join(", ")}).
@@ -118,15 +102,15 @@ export default function LeaveQueue({
                   </div>
                 ) : r.department ? (
                   <div className="mt-3 flex gap-2 rounded-md bg-surface-2 p-3 text-body-sm text-ink-muted">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                     <p>No one else in {r.department} is off on these dates.</p>
                   </div>
                 ) : null)}
 
               {r.reason && (
                 <div className="mt-3 flex gap-2 rounded-md border border-accent/40 bg-accent-soft p-3 text-body-sm text-ink">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent-ink" />
-                  <p>Note: {r.reason}</p>
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-accent-ink" aria-hidden />
+                  <p className="min-w-0 [overflow-wrap:anywhere]">Note: {r.reason}</p>
                 </div>
               )}
 
@@ -136,29 +120,29 @@ export default function LeaveQueue({
                     <button
                       disabled={busy}
                       onClick={() => onStatus(r, "Rejected")}
-                      className="h-9 flex-1 rounded-full border border-border bg-surface text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
+                      className="min-h-tap flex-1 rounded-full border border-border bg-surface text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50 lg:min-h-9"
                     >
                       Decline
                     </button>
                     <button
                       disabled={busy}
                       onClick={() => onStatus(r, "Approved")}
-                      className="h-9 flex-1 rounded-full bg-navy text-label-md font-semibold text-on-navy transition-colors hover:bg-navy-2 disabled:opacity-50"
+                      className="min-h-tap flex-1 rounded-full bg-navy text-label-md font-semibold text-on-navy transition-colors hover:bg-navy-2 disabled:opacity-50 lg:min-h-9"
                     >
                       Approve leave
                     </button>
                   </>
                 ) : (
-                  <span className="flex-1 text-body-sm text-ink-muted">Submitted {formatLeaveRange(r.createdAt.slice(0, 10), r.createdAt.slice(0, 10))}</span>
+                  <span className="min-w-0 flex-1 text-body-sm text-ink-muted">Submitted {formatLeaveRange(r.createdAt.slice(0, 10), r.createdAt.slice(0, 10))}</span>
                 )}
                 <button
                   disabled={busy}
                   onClick={() => onDelete(r)}
                   aria-label={`${isSelf ? "Cancel" : "Delete"} request`}
                   title={isSelf ? "Cancel request" : "Delete request"}
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-muted transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50"
+                  className="grid size-tap shrink-0 place-items-center rounded-full text-ink-muted transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50 lg:size-9"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             </article>

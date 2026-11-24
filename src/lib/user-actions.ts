@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { canManageUsers } from "@/lib/permissions";
+import { isDemoUser, DEMO_LOCKED_MESSAGE } from "@/lib/demo";
 
 /*
   Server actions for managing LOGIN ACCOUNTS (the User table).
@@ -74,6 +75,8 @@ async function requireAdmin() {
   if (!canManageUsers(session?.user?.role)) {
     throw new Error("Not authorized to manage users.");
   }
+  // The public demo's Admin can look, but not create/edit/delete logins.
+  if (isDemoUser(session?.user?.email)) throw new Error(DEMO_LOCKED_MESSAGE);
   return session!;
 }
 

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
 import { CANDIDATE_STAGES, type CandidateInput } from "@/lib/recruitment";
+import BottomSheet from "@/components/ui/BottomSheet";
+import { Field, FieldGrid, FormError, inputClass, textareaClass } from "@/components/ui/form";
+import { buttonClass } from "@/components/ui/button";
 
 const emptyForm = {
   name: "",
@@ -11,6 +13,14 @@ const emptyForm = {
   notes: "",
 };
 
+const FORM_ID = "candidate-form";
+
+/*
+  "Add candidate" form, in a BottomSheet: slides up from the bottom on
+  phones, a centred dialog from md up. The sheet handles Escape, focus and
+  scroll-lock. Cancel / Add sit in the sheet's sticky footer, which is
+  outside the <form>, so the submit button points back at it with form={FORM_ID}.
+*/
 export default function CandidateFormModal({
   open,
   jobs,
@@ -43,15 +53,6 @@ export default function CandidateFormModal({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   function update(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -75,108 +76,86 @@ export default function CandidateFormModal({
     });
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
-
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-navy/45" onClick={onClose} />
-
-      <div role="dialog" aria-modal="true" className="relative flex h-full w-full max-w-md flex-col border-l border-border-strong bg-surface-2 shadow-modal">
-        <div className="flex items-center justify-between border-b border-border px-5 h-16">
-          <div>
-            <h2 className="text-headline-sm text-ink">Add candidate</h2>
-            <p className="text-body-sm text-ink-muted">Add someone to a hiring pipeline</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
-          >
-            <X className="h-4 w-4" />
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      eyebrow="Recruitment"
+      title="Add candidate"
+      description="Add someone to a hiring pipeline"
+      footer={
+        <>
+          {/* Phones: two equal full-width buttons. md+: right-aligned, natural width. */}
+          <button type="button" onClick={onClose} className={`${buttonClass("secondary")} flex-1 md:ml-auto md:flex-none`}>
+            Cancel
           </button>
-        </div>
+          <button type="submit" form={FORM_ID} className={`${buttonClass("primary")} flex-1 md:flex-none`}>
+            Add candidate
+          </button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="space-y-4">
+        <Field label="Job" required>
+          <select className={inputClass} value={jobId} onChange={(e) => setJobId(e.target.value)}>
+            {jobs.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.title}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex-1 space-y-4 p-5">
-            <Field label="Job">
-              <select className={inputClass} value={jobId} onChange={(e) => setJobId(e.target.value)}>
-                {jobs.map((j) => (
-                  <option key={j.id} value={j.id}>{j.title}</option>
-                ))}
-              </select>
-            </Field>
+        {/* One field per line on phones, side by side from sm up */}
+        <FieldGrid>
+          <Field label="Full name" required>
+            <input
+              data-autofocus
+              autoComplete="off"
+              autoCapitalize="words"
+              className={inputClass}
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="e.g. Jane Doe"
+            />
+          </Field>
 
-            <Field label="Full name">
-              <input
-                className={inputClass}
-                value={form.name}
-                onChange={(e) => update("name", e.target.value)}
-                placeholder="e.g. Jane Doe"
-              />
-            </Field>
+          <Field label="Email">
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              className={inputClass}
+              value={form.email}
+              onChange={(e) => update("email", e.target.value)}
+              placeholder="jane@example.com"
+            />
+          </Field>
+        </FieldGrid>
 
-            <Field label="Email">
-              <input
-                type="email"
-                className={inputClass}
-                value={form.email}
-                onChange={(e) => update("email", e.target.value)}
-                placeholder="jane@example.com"
-              />
-            </Field>
+        <Field label="Stage">
+          <select className={inputClass} value={form.stage} onChange={(e) => update("stage", e.target.value)}>
+            {CANDIDATE_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
 
-            <Field label="Stage">
-              <select className={inputClass} value={form.stage} onChange={(e) => update("stage", e.target.value)}>
-                {CANDIDATE_STAGES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
+        <Field label="Notes">
+          <textarea
+            className={`${textareaClass} resize-y`}
+            value={form.notes}
+            onChange={(e) => update("notes", e.target.value)}
+            placeholder="Impressions, links…"
+          />
+        </Field>
 
-            <Field label="Notes">
-              <textarea
-                className={`${inputClass} min-h-20 resize-y`}
-                value={form.notes}
-                onChange={(e) => update("notes", e.target.value)}
-                placeholder="Impressions, links…"
-              />
-            </Field>
-
-            {error && (
-              <p role="alert" className="rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 border-t border-border p-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="h-10 rounded-full bg-accent px-5 text-label-md text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
-            >
-              Add candidate
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
-      {children}
-    </label>
+        {error && <FormError>{error}</FormError>}
+      </form>
+    </BottomSheet>
   );
 }

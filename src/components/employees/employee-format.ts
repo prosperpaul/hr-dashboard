@@ -39,3 +39,13 @@ export function tenure(start: string, today: string): string {
   const m = months % 12;
   return y ? `${y}y${m ? ` ${m}m` : ""}` : `${m}m`;
 }
+
+// "Joined 3 years ago" wording for the phone profile hero: "this month",
+// "5 months ago", "1 year ago", "3 years ago".
+export function joinedAgo(start: string, today: string): string {
+  const months = monthsBetween(start, today);
+  if (months < 1) return "this month";
+  if (months < 12) return `${months} ${months === 1 ? "month" : "months"} ago`;
+  const y = Math.floor(months / 12);
+  return `${y} ${y === 1 ? "year" : "years"} ago`;
+}

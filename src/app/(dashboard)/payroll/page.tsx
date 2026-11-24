@@ -6,6 +6,8 @@ import { todayISO } from "@/lib/attendance";
 import type { SalaryRow, PayRunRow, MyPayslipRow } from "@/lib/payroll";
 import PayrollManager from "@/components/payroll/PayrollManager";
 import MyPayslips from "@/components/payroll/MyPayslips";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
 
 export default async function PayrollPage() {
   const session = await auth();
@@ -79,22 +81,14 @@ export default async function PayrollPage() {
 
 function NotLinked() {
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Payroll · My payslips</p>
-        <h1 className="text-headline-lg text-ink md:text-headline-xl">My payslips.</h1>
-      </div>
-      <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
-        <div className="max-w-sm">
-          <div className="mx-auto grid h-10 w-10 place-items-center rounded-lg border border-border bg-surface-2">
-            <Receipt className="h-5 w-5 text-ink-faint" />
-          </div>
-          <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>
-          <p className="mt-1 text-body-md text-ink-muted">
-            Ask an administrator to link your login to your employee record, then
-            your payslips will appear here.
-          </p>
-        </div>
+    <div className="min-w-0">
+      <PageHeader eyebrow="Payroll · My payslips" title="My payslips." />
+      <div className="rounded-xl border border-border bg-surface">
+        <EmptyState
+          icon={Receipt}
+          title="Your account isn't linked yet"
+          description="Ask an administrator to link your login to your employee record, then your payslips will appear here."
+        />
       </div>
     </div>
   );

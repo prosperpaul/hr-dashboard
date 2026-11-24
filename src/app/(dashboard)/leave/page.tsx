@@ -117,13 +117,13 @@ function NotLinked() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">Operations · Time off</p>
+        <p className="text-eyebrow uppercase text-ink-muted">Operations · Time off</p>
         <h1 className="text-headline-lg text-ink md:text-headline-xl">Your time off, at a glance.</h1>
       </div>
-      <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
+      <div className="grid place-items-center rounded-xl border border-border bg-surface px-4 py-12 text-center md:py-16">
         <div className="max-w-sm">
           <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-accent-soft">
-            <CalendarDays className="h-5 w-5 text-accent-ink" />
+            <CalendarDays className="h-5 w-5 text-accent-ink" aria-hidden />
           </div>
           <p className="mt-3 text-headline-sm text-ink">Your account isn&apos;t linked yet</p>
           <p className="mt-1 text-body-md text-ink-muted">

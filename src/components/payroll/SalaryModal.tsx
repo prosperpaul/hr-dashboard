@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
 import { formatMoney, type SalaryRow } from "@/lib/payroll";
+import BottomSheet from "@/components/ui/BottomSheet";
+import { Field, FormError, inputClass } from "@/components/ui/form";
+import { buttonClass } from "@/components/ui/button";
 
+const FORM_ID = "salary-form";
+
+/*
+  "Edit salary" form, in a BottomSheet (slides up on phones, centred dialog
+  from md up). Save lives in the sheet's sticky footer, outside the <form>,
+  so it points back with form={FORM_ID}.
+*/
 export default function SalaryModal({
   open,
   employee,
@@ -30,89 +39,55 @@ export default function SalaryModal({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open || !employee) return null;
-
   const parsed = Number(value);
   const monthlyPreview = Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed / 12) : 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!employee) return;
     if (!Number.isInteger(parsed) || parsed < 0) {
       setError("Enter a whole number of 0 or more.");
       return;
     }
-    onSave(employee!.employeeId, parsed);
+    onSave(employee.employeeId, parsed);
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
-
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4">
-      <div className="absolute inset-0 bg-navy/45" onClick={onClose} />
-
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-sm rounded-xl border border-border bg-surface shadow-modal">
-        <div className="flex items-center justify-between border-b border-border px-5 h-14">
-          <h2 className="text-headline-sm text-ink">Edit salary</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
-          >
-            <X className="h-4 w-4" />
+    <BottomSheet
+      open={open && employee !== null}
+      onClose={onClose}
+      eyebrow="Payroll"
+      title="Edit salary"
+      description={employee ? `Annual gross salary for ${employee.name}` : undefined}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={`${buttonClass("secondary")} flex-1 md:ml-auto md:flex-none`}>
+            Cancel
           </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5">
-          <p className="text-body-md text-ink-muted">
-            Annual gross salary for <span className="font-medium text-ink">{employee.name}</span>
-          </p>
-          <div className="mt-3">
-            <input
-              type="number"
-              min={0}
-              step={1}
-              className={inputClass}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              autoFocus
-            />
-            <p className="mt-1.5 text-body-sm text-ink-faint">
-              ≈ {formatMoney(monthlyPreview)} / month gross
-            </p>
-          </div>
-
-          {error && (
-            <p role="alert" className="mt-3 rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
-              {error}
-            </p>
-          )}
-
-          <div className="mt-5 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="h-10 rounded-full bg-accent px-5 text-label-md text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
-            >
-              Save
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          <button type="submit" form={FORM_ID} className={`${buttonClass("primary")} flex-1 md:flex-none`}>
+            Save
+          </button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="space-y-4">
+        <Field label="Annual salary (₦)" hint={<span className="tnum">≈ {formatMoney(monthlyPreview)} / month gross</span>}>
+          {/* type="number" + inputMode="numeric": phones show the number pad
+              (whole Naira only, so no decimal key). Parsing is unchanged. */}
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            step={1}
+            autoComplete="off"
+            className={`${inputClass} tnum`}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            data-autofocus
+          />
+        </Field>
+        {error && <FormError>{error}</FormError>}
+      </form>
+    </BottomSheet>
   );
 }

@@ -1,4 +1,6 @@
+import { Laptop, Plane, type LucideIcon } from "lucide-react";
 import type { EmployeeStatus } from "@/lib/sample-data";
+import StatusText, { type StatusTone } from "@/components/ui/StatusText";
 
 /*
   An employee's status, editorial style: a small coloured dot + the word.
@@ -29,5 +31,24 @@ export default function StatusBadge({ status, variant = "dot" }: { status: Emplo
       <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
       {status}
     </span>
+  );
+}
+
+/*
+  The same status for the phone list: icon + colour + word (via StatusText),
+  so it never relies on the little coloured dot alone.
+*/
+const TONE: Record<EmployeeStatus, { tone: StatusTone; icon?: LucideIcon }> = {
+  Active: { tone: "good" },
+  "On Leave": { tone: "warning", icon: Plane },
+  Remote: { tone: "neutral", icon: Laptop },
+};
+
+export function EmployeeStatusText({ status, variant = "text" }: { status: EmployeeStatus; variant?: "text" | "pill" }) {
+  const t = TONE[status] ?? TONE.Active;
+  return (
+    <StatusText tone={t.tone} icon={t.icon} variant={variant}>
+      {status}
+    </StatusText>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Download, ShieldCheck } from "lucide-react";
+import { Plus, Download, ShieldCheck, Inbox, CalendarDays } from "lucide-react";
 import {
   usedAllowanceDays,
   ALLOWANCE_TYPES,
@@ -17,6 +17,12 @@ import LeaveCalendar from "./LeaveCalendar";
 import LeaveQueue from "./LeaveQueue";
 import LeaveList from "./LeaveList";
 import LeaveBalances, { BalanceSpotlight, type BalanceRow } from "./LeaveBalances";
+import LeaveRequestCard from "./LeaveRequestCard";
+import { buttonClass } from "@/components/ui/button";
+import { ChipTabs, Segmented } from "@/components/ui/Chips";
+import Fab from "@/components/ui/Fab";
+import EmptyState from "@/components/ui/EmptyState";
+import ConfirmSheet, { type Confirmation } from "@/components/employees/ConfirmSheet";
 
 const DAY = 86_400_000;
 const parseDay = (s: string) => {
@@ -115,12 +121,25 @@ export default function LeaveManager({
     deptRequests.filter((r) => r.status !== "Rejected" && r.startDate <= monthEnd && r.endDate >= `${month}-01`).map((r) => r.employeeId),
   ).size;
 
+  // Phones & tablets (below lg) follow the mobile design instead of the tab
+  // row: a "Requests | Calendar" switch, and under Requests, status chips.
+  // The chips drive the SAME `tab` state as the desktop tabs; while desktop
+  // sits on its timeline, phones simply show the Pending requests.
+  const [phoneView, setPhoneView] = useState<"requests" | "calendar">("requests");
+  const phoneStatus = tab === "timeline" ? "Pending" : tab;
+
   const tabs = [
     { key: "timeline" as const, label: "Timeline", count: offInMonth },
     { key: "Pending" as const, label: "Pending", count: deptRequests.filter((r) => r.status === "Pending").length },
     { key: "Approved" as const, label: "Approved", count: deptRequests.filter((r) => r.status === "Approved").length },
     { key: "Rejected" as const, label: "Declined", count: deptRequests.filter((r) => r.status === "Rejected").length },
   ];
+
+  // The phone request cards: the chosen status, soonest first for Pending,
+  // most recent first otherwise (same order as the desktop list).
+  const phoneList = deptRequests
+    .filter((r) => r.status === phoneStatus)
+    .sort((a, b) => (phoneStatus === "Pending" ? a.startDate.localeCompare(b.startDate) : b.startDate.localeCompare(a.startDate)));
 
   // Self-service figures.
   const mine = balances[0];
@@ -141,10 +160,18 @@ export default function LeaveManager({
   }
   const handleSave = (data: LeaveInput) => act(() => createLeaveRequest(data), () => setModalOpen(false));
   const handleStatus = (row: LeaveRow, status: "Approved" | "Rejected") => act(() => setLeaveStatus(row.id, status));
+  // Deleting asks first, in a small sheet (ConfirmSheet) instead of the
+  // browser's plain confirm() box.
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   function handleDelete(row: LeaveRow) {
     const what = isSelf ? "Cancel your" : `Delete ${row.employeeName}'s`;
-    if (!window.confirm(`${what} ${row.type.toLowerCase()} request (${formatLeaveRange(row.startDate, row.endDate)})?`)) return;
-    act(() => deleteLeaveRequest(row.id));
+    setConfirmation({
+      title: isSelf ? "Cancel this request?" : "Delete this request?",
+      message: `${what} ${row.type.toLowerCase()} request (${formatLeaveRange(row.startDate, row.endDate)})?`,
+      confirmLabel: isSelf ? "Cancel request" : "Delete request",
+      danger: true,
+      onConfirm: () => act(() => deleteLeaveRequest(row.id)),
+    });
   }
 
   // Download every request as CSV.
@@ -178,11 +205,46 @@ export default function LeaveManager({
       ];
 
   return (
-    <div className="space-y-6">
+    // Extra bottom room on phones so the floating "Request leave" button never
+    // covers the last card's buttons.
+    <div className={`space-y-6 ${canRequest ? "pb-20 lg:pb-0" : ""}`}>
       {/* ── Header ── */}
-      <section className="flex flex-col justify-between gap-5 border-b border-border pb-6 lg:flex-row lg:items-start">
+      {/* Phones & tablets: compact editorial header (eyebrow + year, title + export). */}
+      <section className="space-y-2 lg:hidden">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-eyebrow uppercase text-ink-muted">Time &amp; attendance</p>
+          <span className="tnum inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-label-sm font-semibold text-ink">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />
+            {year}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-headline-lg text-ink">Leave</h1>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={requests.length === 0}
+            aria-label="Export all requests as CSV"
+            title="Export CSV"
+            className="grid size-tap shrink-0 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+          >
+            <Download className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+        <p className="text-body-sm text-ink-muted">
+          {isPending
+            ? "Working…"
+            : summary
+                .slice(0, 2)
+                .map((s) => `${s.text} ${s.rest}`)
+                .join(" · ")}
+        </p>
+      </section>
+
+      {/* Desktop (lg+) header */}
+      <section className="hidden flex-col justify-between gap-5 border-b border-border pb-6 lg:flex lg:flex-row lg:items-start">
         <div className="min-w-0 space-y-2">
-          <p className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted">
+          <p className="flex flex-wrap items-center gap-2 text-eyebrow uppercase text-ink-muted">
             <span>Operations</span>
             <span className="h-1 w-1 rounded-full bg-accent" />
             <span>Time off &amp; absence calendar</span>
@@ -199,29 +261,25 @@ export default function LeaveManager({
             {summary.map((s, i) => (
               <li key={s.rest} className="flex items-center gap-1.5">
                 {i > 0 && <span className="mr-1.5 text-border-strong">/</span>}
-                {s.dot && <span className="h-2 w-2 rounded-full bg-critical" />}
+                {s.dot && <span aria-hidden className="h-2 w-2 rounded-full bg-critical" />}
                 <span className="tnum font-bold text-ink">{s.text}</span> {s.rest}
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            onClick={exportCsv}
-            disabled={requests.length === 0}
-            className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
+        <div className="flex shrink-0 flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <button onClick={exportCsv} disabled={requests.length === 0} className={buttonClass("secondary", { block: true }) + " sm:w-auto"}>
+            <Download className="h-4 w-4" aria-hidden />
             Export CSV
           </button>
           {canRequest && (
             <button
               onClick={() => setModalOpen(true)}
               disabled={isPending || employees.length === 0}
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed disabled:opacity-60"
+              className={buttonClass("primary", { block: true }) + " sm:w-auto"}
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4" aria-hidden />
               Request leave
             </button>
           )}
@@ -229,7 +287,65 @@ export default function LeaveManager({
       </section>
 
       {/* ── Tabs: the timeline, or a list of requests in one status ── */}
-      <nav className="flex gap-6 overflow-x-auto border-b border-border" role="tablist">
+      {/* Phones: a swipeable row of rounded "chips" (48px tall, yellow when
+          active). From md up they turn back into underlined text tabs. */}
+      {/* Phones & tablets: Requests | Calendar switch, then the status chips. */}
+      <div className="space-y-3 lg:hidden">
+        <Segmented
+          label="Leave view"
+          value={phoneView}
+          onChange={(k) => setPhoneView(k as "requests" | "calendar")}
+          options={[
+            { key: "requests", label: "Requests", count: tabs[1].count, icon: <Inbox className="h-4 w-4" aria-hidden /> },
+            { key: "calendar", label: "Calendar", icon: <CalendarDays className="h-4 w-4" aria-hidden /> },
+          ]}
+        />
+        {phoneView === "requests" && (
+          <ChipTabs
+            label="Filter requests by status"
+            value={phoneStatus}
+            onChange={(k) => setTab(k as "Pending" | "Approved" | "Rejected")}
+            options={tabs.slice(1).map((t) => ({ key: t.key, label: t.label, count: t.count }))}
+          />
+        )}
+      </div>
+
+      {/* Phones & tablets: the requests as cards (see LeaveRequestCard). */}
+      {phoneView === "requests" && (
+        <ul aria-label={`${phoneStatus === "Rejected" ? "Declined" : phoneStatus} leave requests`} className="space-y-3 lg:hidden">
+          {phoneList.map((r) => (
+            <li key={r.id}>
+              <LeaveRequestCard
+                r={r}
+                allRequests={requests}
+                today={today}
+                weekAhead={weekAhead}
+                balance={remainingFor(r.employeeId)}
+                canManage={canManage}
+                isSelf={isSelf}
+                busy={isPending}
+                onStatus={handleStatus}
+                onDelete={handleDelete}
+              />
+            </li>
+          ))}
+          {phoneList.length === 0 && (
+            <li className="rounded-xl border border-border bg-surface">
+              <EmptyState
+                title={`No ${phoneStatus === "Rejected" ? "declined" : phoneStatus.toLowerCase()} requests`}
+                description={phoneStatus === "Pending" ? "Nothing waiting. All caught up." : undefined}
+              />
+            </li>
+          )}
+        </ul>
+      )}
+
+      {/* Desktop (lg+) tab row */}
+      <nav
+        className="-mx-gutter hidden gap-2 lg:flex overflow-x-auto px-gutter pb-1 md:mx-0 md:gap-6 md:border-b md:border-border md:px-0 md:pb-0"
+        role="tablist"
+        aria-label="Leave views"
+      >
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -237,14 +353,17 @@ export default function LeaveManager({
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={[
-              "-mb-px flex shrink-0 items-center gap-2 border-b-2 pb-3 pt-1 font-display text-label-md font-semibold transition-colors",
-              tab === t.key ? "border-ink text-ink" : "border-transparent text-ink-muted hover:text-ink",
+              "flex min-h-tap shrink-0 items-center gap-2 rounded-full border px-4 font-display text-label-md font-semibold transition-colors",
+              "md:-mb-px lg:min-h-0 md:rounded-none md:border-x-0 md:border-t-0 md:border-b-2 md:px-0 md:pb-3 md:pt-1",
+              tab === t.key
+                ? "border-accent bg-accent text-on-accent md:border-ink md:bg-transparent md:text-ink"
+                : "border-border bg-surface text-ink-muted hover:text-ink md:border-transparent md:bg-transparent",
             ].join(" ")}
           >
             {t.label}
             <span
               className={[
-                "tnum rounded-full px-2 text-[11px] font-bold",
+                "tnum rounded-full px-2 text-label-sm font-bold",
                 tab === t.key ? "bg-navy text-on-navy" : t.key === "Pending" && t.count > 0 ? "bg-critical/10 text-critical" : "bg-surface-2 text-ink-muted",
               ].join(" ")}
             >
@@ -256,18 +375,24 @@ export default function LeaveManager({
 
       {/* ── Main column + right rail ── */}
       <section className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-        <div className="min-w-0 xl:col-span-8">
-          {tab === "timeline" ? (
-            <LeaveCalendar
-              requests={deptRequests}
-              departments={canManage ? departments : []}
-              today={today}
-              month={month}
-              onMonthChange={setMonth}
-              dept={dept}
-              onDeptChange={setDept}
-            />
-          ) : (
+        {/* One calendar serves both layouts: below lg it shows when the
+            "Calendar" switch is on; from lg up when the Timeline tab is.
+            The desktop request table is lg+ only (phones get the cards). */}
+        <div
+          className={`min-w-0 xl:col-span-8 ${phoneView === "calendar" ? "" : "hidden"} ${tab === "timeline" ? "lg:block" : "lg:hidden"}`}
+        >
+          <LeaveCalendar
+            requests={deptRequests}
+            departments={canManage ? departments : []}
+            today={today}
+            month={month}
+            onMonthChange={setMonth}
+            dept={dept}
+            onDeptChange={setDept}
+          />
+        </div>
+        {tab !== "timeline" && (
+          <div className="hidden min-w-0 lg:block xl:col-span-8">
             <LeaveList
               rows={deptRequests.filter((r) => r.status === tab)}
               status={tab}
@@ -277,22 +402,25 @@ export default function LeaveManager({
               onStatus={handleStatus}
               onDelete={handleDelete}
             />
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="space-y-6 xl:col-span-4">
-          <LeaveQueue
-            pending={pending}
-            allRequests={requests}
-            today={today}
-            weekAhead={weekAhead}
-            remainingFor={remainingFor}
-            canManage={canManage}
-            isSelf={isSelf}
-            busy={isPending}
-            onStatus={handleStatus}
-            onDelete={handleDelete}
-          />
+          {/* The approvals rail is desktop-only: on phones the Pending cards above replace it. */}
+          <div className="hidden lg:block">
+            <LeaveQueue
+              pending={pending}
+              allRequests={requests}
+              today={today}
+              weekAhead={weekAhead}
+              remainingFor={remainingFor}
+              canManage={canManage}
+              isSelf={isSelf}
+              busy={isPending}
+              onStatus={handleStatus}
+              onDelete={handleDelete}
+            />
+          </div>
 
           {isSelf && mine ? (
             <BalanceSpotlight
@@ -334,8 +462,8 @@ export default function LeaveManager({
           ) : null}
 
           {/* How the allowance works (the app's real rule, not a made-up policy) */}
-          <div className="flex gap-3 rounded-xl border border-border bg-surface-2 p-5">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-ink" />
+          <div className="flex gap-3 rounded-xl border border-border bg-surface-2 p-4 md:p-5">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-ink" aria-hidden />
             <div>
               <p className="font-display text-label-md font-semibold text-ink">How the {year} allowance works</p>
               <p className="mt-1 text-body-sm text-ink-muted">
@@ -349,6 +477,11 @@ export default function LeaveManager({
 
       {/* ── Balances table (managers only — self-service sees theirs in the rail) ── */}
       {canManage && <LeaveBalances rows={balances} year={year} />}
+
+      {/* Phones & tablets: "Request leave" floats above the tab bar. */}
+      {canRequest && employees.length > 0 && <Fab label="Request leave" icon={<Plus className="h-5 w-5" />} onClick={() => setModalOpen(true)} />}
+
+      <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} />
 
       <LeaveRequestModal
         open={modalOpen}

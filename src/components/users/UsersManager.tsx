@@ -2,7 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, Trash2, Download, X, Link2, KeyRound, Eye, EyeOff, CheckCircle2, UserRound, Check, Minus } from "lucide-react";
+import { Search, Plus, Trash2, Download, Link2, KeyRound, Eye, EyeOff, CheckCircle2, UserRound, Check, Minus } from "lucide-react";
+import BottomSheet from "@/components/ui/BottomSheet";
+import FilterBar from "@/components/ui/FilterBar";
+import ResponsiveList from "@/components/ui/ResponsiveList";
+import StatusText from "@/components/ui/StatusText";
+import Fab from "@/components/ui/Fab";
+import { buttonClass } from "@/components/ui/button";
+import { Field, inputClass } from "@/components/ui/form";
 import { initialsOf } from "@/lib/sample-data";
 import {
   ROLES,
@@ -55,14 +62,96 @@ const PAGE_SIZES = [10, 25, 50];
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
-const capsLabel = "text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted";
+const capsLabel = "text-eyebrow uppercase text-ink-muted";
 
 // Round initials avatar, tinted by the linked employee's department.
-function Avatar({ name, department, size = "h-9 w-9 text-[11px]" }: { name: string; department: string | null; size?: string }) {
+function Avatar({ name, department, size = "h-9 w-9 text-label-sm" }: { name: string; department: string | null; size?: string }) {
   return (
-    <div className={`grid shrink-0 place-items-center rounded-full font-semibold text-ink ${size} ${deptTint(department)}`}>
+    <span aria-hidden className={`grid shrink-0 place-items-center rounded-full font-semibold text-ink ${size} ${deptTint(department)}`}>
       {name ? initialsOf(name) : <UserRound className="h-5 w-5" />}
-    </div>
+    </span>
+  );
+}
+
+// Role name with its little coloured dot (the words carry the meaning).
+function RoleTag({ role, pill = false }: { role: string; pill?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-2 whitespace-nowrap text-ink ${
+        pill ? "rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-label-sm" : ""
+      }`}
+    >
+      <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${ROLE_DOT[role] ?? ROLE_DOT.Employee}`} />
+      {role}
+    </span>
+  );
+}
+
+/*
+  "Added 3 days ago" — how long ago an account was created, measured from the
+  server's `now` so the server and browser render the same words. (The app
+  doesn't record sign-ins, so this is the only real date we can show.)
+*/
+function addedAgo(iso: string, now: string) {
+  const days = Math.floor((new Date(now).getTime() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return "Added today";
+  if (days === 1) return "Added yesterday";
+  if (days < 30) return `Added ${days} days ago`;
+  return `Added ${formatDate(iso)}`;
+}
+
+/*
+  Phone/tablet account card (mockup z26): avatar, name + "You", email, role
+  with its dot, and a status pill. The whole card is one button that opens
+  the account sheet. The app has no active/suspended flag, so the status is
+  whether this login is linked to an employee record.
+*/
+function AccountCard({
+  user,
+  department,
+  isYou,
+  added,
+  onOpen,
+}: {
+  user: UserRow;
+  department: string | null;
+  isYou: boolean;
+  added: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Edit ${user.name}'s account`}
+      className="flex w-full items-start gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-colors active:bg-surface-2"
+    >
+      <Avatar name={user.name} department={department} size="size-12 text-label-md" />
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex items-start justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-display text-headline-sm text-ink">{user.name}</span>
+            {isYou && <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-label-sm text-on-accent">You</span>}
+          </span>
+          {user.employeeId ? (
+            <StatusText tone="good" variant="pill" className="shrink-0 text-label-sm">
+              Linked
+            </StatusText>
+          ) : (
+            <StatusText tone="neutral" variant="pill" className="shrink-0 text-label-sm">
+              Not linked
+            </StatusText>
+          )}
+        </span>
+        <span className="truncate text-body-sm text-ink-muted">{user.email}</span>
+        <span className="flex items-center justify-between gap-2 pt-1 text-label-md">
+          <span className="min-w-0 truncate font-semibold">
+            <RoleTag role={user.role} />
+          </span>
+          <span className="tnum shrink-0 text-body-sm text-ink-muted">{added}</span>
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -89,6 +178,14 @@ export default function UsersManager({
   const [showPw, setShowPw] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  // "Are you sure?" step for deleting, shown inside the account sheet.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // The sheet slides away after `draft` becomes null; keep showing the last
+  // draft during that animation so its contents don't blank out mid-slide.
+  const [lastDraft, setLastDraft] = useState<Draft | null>(null);
+  if (draft && draft !== lastDraft) setLastDraft(draft);
+  const sheet = draft ?? lastDraft;
 
   // ── Headline numbers ──────────────────────────────────────────────
   const linked = users.filter((u) => u.employeeId).length;
@@ -111,20 +208,22 @@ export default function UsersManager({
   const visible = filtered.slice(current * pageSize, current * pageSize + pageSize);
 
   // ── Drawer (edit / add) ───────────────────────────────────────────
-  const editingUser = draft && draft.id !== "new" ? users.find((u) => u.id === draft.id) ?? null : null;
-  const isSelf = draft?.id === currentUserId;
+  const editingUser = sheet && sheet.id !== "new" ? users.find((u) => u.id === sheet.id) ?? null : null;
+  const isSelf = sheet?.id === currentUserId;
   // Employees offered in the link dropdown: unlinked ones + whoever this user already has.
   const linkOptions = employees.filter((e) => !linkedIds.has(e.id) || e.id === editingUser?.employeeId);
-  const linkedEmp = employees.find((e) => e.id === draft?.employeeId) ?? null;
+  const linkedEmp = employees.find((e) => e.id === sheet?.employeeId) ?? null;
 
   function open(u: UserRow) {
     setMsg(null);
     setShowPw(false);
+    setConfirmDelete(false);
     setDraft({ id: u.id, name: u.name, email: u.email, role: u.role, employeeId: u.employeeId ?? "", password: "" });
   }
   function openNew() {
     setMsg(null);
     setShowPw(false);
+    setConfirmDelete(false);
     setDraft({ id: "new", name: "", email: "", role: "Employee", employeeId: "", password: "" });
   }
   const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
@@ -156,10 +255,12 @@ export default function UsersManager({
   }
 
   function remove() {
-    if (!editingUser || !window.confirm(`Delete ${editingUser.name}'s login? They won't be able to sign in. Their employee record is kept.`)) return;
+    // Only runs after the "Delete login" confirm step in the sheet's footer.
+    if (!editingUser) return;
     startTransition(async () => {
       try {
         await deleteUser(editingUser.id);
+        setConfirmDelete(false);
         setDraft(null);
         router.refresh();
       } catch (err) {
@@ -179,43 +280,99 @@ export default function UsersManager({
     URL.revokeObjectURL(url);
   }
 
-  const input =
-    "h-11 w-full rounded-lg border border-border bg-surface px-3 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
   const label = `mb-1.5 block ${capsLabel}`;
+  const closeSheet = () => {
+    setConfirmDelete(false);
+    setDraft(null);
+  };
+
+  // Footer: count, page size, pager. Used under the phone cards and inside the
+  // desktop table card (`extra` adds the card's border/padding there).
+  // Phones: two tidy rows, 48px controls.
+  const pager = (extra: string) => (
+    <div className={`flex flex-col gap-3 text-body-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between ${extra}`}>
+      <div className="flex items-center justify-between gap-3 sm:justify-start">
+        <span className="tnum">
+          Showing {filtered.length ? `${current * pageSize + 1}–${current * pageSize + visible.length}` : 0} of {filtered.length} accounts
+        </span>
+        <label className="flex items-center gap-2">
+          Rows
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(0);
+            }}
+            className="min-h-tap rounded-full border border-border bg-surface px-3 text-label-md text-ink outline-none focus:border-ink lg:min-h-7 lg:px-2 lg:text-label-sm"
+          >
+            {PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={current === 0}
+          onClick={() => setPage(current - 1)}
+          className="min-h-tap flex-1 rounded-full border border-border bg-surface px-4 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-40 sm:flex-none lg:min-h-8 lg:px-3 lg:text-label-sm"
+        >
+          Previous
+        </button>
+        <span className="tnum shrink-0 px-1 text-label-sm text-ink">
+          {current + 1} / {pages}
+        </span>
+        <button
+          type="button"
+          disabled={current >= pages - 1}
+          onClick={() => setPage(current + 1)}
+          className="min-h-tap flex-1 rounded-full border border-border bg-surface px-4 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-40 sm:flex-none lg:min-h-8 lg:px-3 lg:text-label-sm"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-8">
+    <div className="pb-20 lg:pb-0 space-y-8">
+      {/* pb-20: room so the floating Fab never covers the last item on phones */}
       {/* ── Editorial header ── */}
-      <section className="space-y-4 border-b border-border pb-6">
+      <section className="space-y-1 lg:space-y-4 lg:border-b lg:border-border lg:pb-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-          <div className="space-y-2">
-            <p className={capsLabel}>System · Access &amp; permissions</p>
+          <div className="min-w-0 space-y-2">
+            <p className={`${capsLabel} max-lg:hidden`}>System · Access &amp; permissions</p>
             <h1 className="text-headline-lg text-ink md:text-headline-xl">Who can sign in.</h1>
-            <p className="max-w-2xl text-body-md text-ink-muted">
+            {/* Phones/tablets: just the title + a one-line count summary (below). */}
+            <p className="max-w-2xl text-body-md text-ink-muted max-lg:hidden">
               {isPending ? "Working…" : "Manage login accounts, assign roles, and link each login to an employee record."}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              onClick={exportCsv}
-              className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-surface px-4 text-label-md text-ink transition-colors hover:bg-bg"
-            >
-              <Download className="h-4 w-4" />
+          {/* lg+: both buttons sit here. Phones/tablets: "Add account" is the
+              floating yellow button (Fab) and Export moves under the list. */}
+          <div className="flex shrink-0 gap-2 max-lg:hidden">
+            <button type="button" onClick={exportCsv} className={buttonClass("secondary")}>
+              <Download className="h-4 w-4" aria-hidden />
               Export CSV
             </button>
-            <button
-              onClick={openNew}
-              disabled={isPending}
-              className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-60"
-            >
-              <Plus className="h-4 w-4" />
+            <button type="button" onClick={openNew} disabled={isPending} className={`${buttonClass("primary")} max-lg:hidden`}>
+              <Plus className="h-4 w-4" aria-hidden />
               Add account
             </button>
           </div>
         </div>
 
-        {/* One-line summary strip (all real counts) */}
-        <p className="tnum flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-ink-muted">
+        {/* Phones/tablets: a short summary line under the title (real counts). */}
+        <p className="tnum text-body-sm text-ink-muted lg:hidden">
+          {users.length} account{users.length === 1 ? "" : "s"} · {linked} linked · {users.length - linked} not linked
+          {isPending ? " · Working…" : ""}
+        </p>
+
+        {/* lg+: the fuller one-line summary strip (all real counts) */}
+        <p className="tnum flex flex-wrap items-center gap-x-3 gap-y-1 text-body-sm text-ink-muted max-lg:hidden">
           <span className="font-semibold text-ink">
             {users.length} account{users.length === 1 ? "" : "s"}
           </span>
@@ -239,151 +396,203 @@ export default function UsersManager({
       {/* ── Tabs (jump links) + search + role filter ── */}
       <section className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <nav className="flex gap-6 border-b border-border">
-            <a href="#accounts" className="-mb-px border-b-2 border-ink pb-2.5 text-label-md font-semibold text-ink">
-              Accounts <span className="tnum">({users.length})</span>
+          {/* Jump links: 48px tall on touch screens, the slim underline tabs from lg up */}
+          {/* Hidden below lg: phones get the mockup's plain search + Filters row;
+              the access matrix is still right below the list. */}
+          <nav aria-label="Sections" className="flex gap-6 border-b border-border max-lg:hidden">
+            <a href="#accounts" className="-mb-px inline-flex min-h-tap items-end border-b-2 border-ink pb-2.5 text-label-md font-semibold text-ink lg:min-h-0">
+              Accounts&nbsp;<span className="tnum">({users.length})</span>
             </a>
-            <a href="#access-matrix" className="-mb-px border-b-2 border-transparent pb-2.5 text-label-md text-ink-muted transition-colors hover:text-ink">
+            <a
+              href="#access-matrix"
+              className="-mb-px inline-flex min-h-tap items-end border-b-2 border-transparent pb-2.5 text-label-md text-ink-muted transition-colors hover:text-ink lg:min-h-0"
+            >
               Roles &amp; permissions
             </a>
           </nav>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative sm:w-80">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-              <input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setPage(0);
-                }}
-                placeholder="Search accounts by name or email…"
-                className="h-10 w-full rounded-full border border-border bg-surface pl-10 pr-4 text-body-sm text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink"
-              />
-            </div>
-            <select
-              aria-label="Role"
-              value={roleFilter}
-              onChange={(e) => {
-                setRoleFilter(e.target.value);
-                setPage(0);
-              }}
-              className="h-10 rounded-full border border-border bg-surface px-4 text-label-md text-ink outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink"
-            >
-              <option value="all">All roles</option>
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r} ({byRole(r)})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* ── Accounts table ── */}
-        <div id="accounts" className="scroll-mt-6 overflow-hidden rounded-xl border border-border bg-surface">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-body-sm">
-              <thead>
-                <tr className="border-b border-border bg-bg text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">
-                  <th className="px-5 py-3">User</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="hidden px-4 py-3 md:table-cell">Linked employee</th>
-                  <th className="hidden px-5 py-3 lg:table-cell">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visible.map((u) => {
-                  const selected = draft?.id === u.id;
-                  return (
-                    <tr
-                      key={u.id}
-                      onClick={() => open(u)}
-                      className={`cursor-pointer border-b border-border last:border-0 ${selected ? "bg-surface-2" : "hover:bg-bg"}`}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={u.name} department={deptOf(u.employeeId)} />
-                          <div className="min-w-0">
-                            <p className="flex items-center gap-2 truncate font-semibold text-ink">
-                              {u.name}
-                              {u.id === currentUserId && (
-                                <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-muted">You</span>
-                              )}
-                            </p>
-                            <p className="truncate text-ink-muted">{u.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="inline-flex items-center gap-2 text-ink">
-                          <span className={`h-2 w-2 rounded-full ${ROLE_DOT[u.role] ?? ROLE_DOT.Employee}`} />
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="hidden px-4 py-3.5 md:table-cell">
-                        {u.employeeName ? (
-                          <span className="flex items-center gap-1.5 text-ink">
-                            <Link2 className="h-3.5 w-3.5 text-ink-muted" />
-                            {u.employeeName}
-                          </span>
-                        ) : (
-                          <span className="text-ink-faint">Not linked</span>
-                        )}
-                      </td>
-                      <td className="tnum hidden px-5 py-3.5 text-ink-muted lg:table-cell">{formatDate(u.createdAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {visible.length === 0 && <p className="py-12 text-center text-body-md text-ink-muted">No accounts match.</p>}
-          </div>
-
-          {/* Footer: count, page size, pager */}
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-border px-5 py-3 text-body-sm text-ink-muted sm:flex-row">
-            <div className="flex items-center gap-3">
-              <span className="tnum">
-                Showing {filtered.length ? `${current * pageSize + 1}–${current * pageSize + visible.length}` : 0} of {filtered.length} accounts
-              </span>
-              <label className="flex items-center gap-2">
-                Rows
-                <select
-                  value={pageSize}
+          <FilterBar
+            title="Role"
+            activeCount={roleFilter === "all" ? 0 : 1}
+            onReset={() => {
+              setRoleFilter("all");
+              setPage(0);
+            }}
+            search={
+              <div className="relative w-full md:w-80">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
+                <input
+                  type="search"
+                  autoComplete="off"
+                  enterKeyHint="search"
+                  aria-label="Search accounts"
+                  value={query}
                   onChange={(e) => {
-                    setPageSize(Number(e.target.value));
+                    setQuery(e.target.value);
                     setPage(0);
                   }}
-                  className="h-7 rounded-full border border-border bg-surface px-2 text-label-sm text-ink outline-none"
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <button disabled={current === 0} onClick={() => setPage(current - 1)} className="h-8 rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-40">
-                Previous
-              </button>
-              <span className="tnum text-label-sm text-ink">
-                {current + 1} / {pages}
-              </span>
-              <button disabled={current >= pages - 1} onClick={() => setPage(current + 1)} className="h-8 rounded-full border border-border bg-surface px-3 text-label-sm text-ink transition-colors hover:bg-bg disabled:opacity-40">
-                Next
-              </button>
-            </div>
-          </div>
+                  placeholder="Search accounts by name or email…"
+                  className={`${inputClass.replace("px-3.5", "pl-10 pr-4").replace("lg:min-h-11", "lg:min-h-10")} rounded-full`}
+                />
+              </div>
+            }
+          >
+            <label className="flex flex-col gap-1.5">
+              <span className="text-label-md text-ink md:sr-only">Role</span>
+              <select
+                value={roleFilter}
+                onChange={(e) => {
+                  setRoleFilter(e.target.value);
+                  setPage(0);
+                }}
+                className={`${inputClass.replace("lg:min-h-11", "lg:min-h-10")} cursor-pointer md:w-auto md:rounded-full md:text-label-md`}
+              >
+                <option value="all">All roles</option>
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r} ({byRole(r)})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </FilterBar>
+        </div>
+
+        {/* ── Phones/tablets: one tappable card per account ── */}
+        {visible.length === 0 ? (
+          <p className="rounded-xl border border-border bg-surface py-12 text-center text-body-md text-ink-muted lg:hidden">No accounts match.</p>
+        ) : (
+          <ul aria-label="User accounts" className="space-y-3 lg:hidden">
+            {visible.map((u) => (
+              <li key={u.id}>
+                <AccountCard
+                  user={u}
+                  department={deptOf(u.employeeId)}
+                  isYou={u.id === currentUserId}
+                  added={addedAgo(u.createdAt, now)}
+                  onOpen={() => open(u)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="space-y-3 lg:hidden">
+          {pager("")}
+          <button type="button" onClick={exportCsv} className={`${buttonClass("ghost", { block: true })}`}>
+            <Download className="h-4 w-4" aria-hidden />
+            Export CSV
+          </button>
+        </div>
+
+        {/* ── lg+: the full table ── */}
+        <div id="accounts" className="overflow-hidden rounded-xl border border-border bg-surface max-lg:hidden">
+          <ResponsiveList
+            inset
+            caption="User accounts"
+            rows={visible}
+            getKey={(u) => u.id}
+            listClassName="px-4"
+            // `relative` lets the name button below stretch over the whole row,
+            // so clicking anywhere on a desktop row opens the account.
+            rowClassName={(u) => `relative cursor-pointer ${draft?.id === u.id ? "bg-surface-2" : ""}`}
+            empty={<p className="py-12 text-center text-body-md text-ink-muted">No accounts match.</p>}
+            columns={[
+              {
+                key: "user",
+                header: "User",
+                cell: (u) => (
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={u.name} department={deptOf(u.employeeId)} />
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 font-semibold text-ink">
+                        <button
+                          type="button"
+                          onClick={() => open(u)}
+                          className="truncate text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ink"
+                        >
+                          {u.name}
+                        </button>
+                        {u.id === currentUserId && <span className="rounded bg-surface-2 px-1.5 py-0.5 text-eyebrow uppercase text-ink-muted">You</span>}
+                      </p>
+                      <p className="truncate text-body-sm text-ink-muted">{u.email}</p>
+                    </div>
+                  </div>
+                ),
+              },
+              { key: "role", header: "Role", cell: (u) => <RoleTag role={u.role} /> },
+              {
+                key: "employee",
+                header: "Linked employee",
+                cell: (u) =>
+                  u.employeeName ? (
+                    <span className="flex items-center gap-1.5 text-ink">
+                      <Link2 className="h-3.5 w-3.5 text-ink-muted" aria-hidden />
+                      {u.employeeName}
+                    </span>
+                  ) : (
+                    <span className="text-ink-faint">Not linked</span>
+                  ),
+              },
+              {
+                key: "created",
+                header: "Created",
+                className: "tnum hidden text-ink-muted lg:table-cell",
+                headerClassName: "hidden lg:table-cell",
+                cell: (u) => formatDate(u.createdAt),
+              },
+            ]}
+            // The phone list is never shown here (this whole box is lg+ only);
+            // phones/tablets use the account cards above instead.
+            renderRow={() => null}
+          />
+
+          {pager("border-t border-border px-4 py-3 md:px-5")}
         </div>
       </section>
 
       {/* ── System access matrix ── */}
-      <section id="access-matrix" className="scroll-mt-6 rounded-xl border border-border bg-surface p-5 sm:p-8">
+      <section id="access-matrix" className="rounded-xl border border-border bg-surface p-4 sm:p-8">
         <h2 className="text-headline-md text-ink">System access matrix</h2>
         <p className="mt-1 text-body-md text-ink-muted">What each role can do. Everyone can always manage their own leave, attendance and payslips.</p>
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-body-sm">
+
+        {/* Phones: one card per role listing what it can and can't do (a
+            5-column grid would need sideways scrolling at 360px). */}
+        <ul className="mt-5 space-y-3 md:hidden">
+          {ROLES.map((r) => (
+            <li key={r} className="rounded-lg bg-sunken p-3">
+              <h3 className="flex items-center justify-between gap-2 text-label-md font-semibold text-ink">
+                <RoleTag role={r} />
+                <span className="tnum text-body-sm font-normal text-ink-muted">
+                  {byRole(r)} account{byRole(r) === 1 ? "" : "s"}
+                </span>
+              </h3>
+              <ul className="mt-3 space-y-2">
+                {MATRIX.map((m) => {
+                  const ok = m.can(r);
+                  return (
+                    <li key={m.label} className="flex items-start gap-2.5 text-body-sm">
+                      {ok ? (
+                        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-navy text-on-navy" aria-hidden>
+                          <Check className="h-3 w-3" />
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center text-ink-faint" aria-hidden>
+                          <Minus className="h-3 w-3" />
+                        </span>
+                      )}
+                      <span className={ok ? "text-ink" : "text-ink-faint line-through decoration-ink-faint/50"}>
+                        {m.label}
+                        <span className="sr-only">{ok ? ": allowed" : ": no access"}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-6 hidden overflow-x-auto md:block">
+          <table className="w-full text-left text-body-sm">
             <thead>
               <tr className={`border-b border-border ${capsLabel}`}>
                 <th className="py-3 pr-4">Permission scope</th>
@@ -405,12 +614,12 @@ export default function UsersManager({
                   {ROLES.map((r) => (
                     <td key={r} className="px-3 py-3.5 text-center">
                       {m.can(r) ? (
-                        <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-navy text-on-navy" aria-label="Allowed">
-                          <Check className="h-3.5 w-3.5" />
+                        <span className="inline-grid h-6 w-6 place-items-center rounded-full bg-navy text-on-navy" role="img" aria-label="Allowed">
+                          <Check className="h-3.5 w-3.5" aria-hidden />
                         </span>
                       ) : (
-                        <span className="inline-grid h-6 w-6 place-items-center text-ink-faint" aria-label="No access">
-                          <Minus className="h-3.5 w-3.5" />
+                        <span className="inline-grid h-6 w-6 place-items-center text-ink-faint" role="img" aria-label="No access">
+                          <Minus className="h-3.5 w-3.5" aria-hidden />
                         </span>
                       )}
                     </td>
@@ -422,186 +631,209 @@ export default function UsersManager({
         </div>
       </section>
 
-      {/* ── Account drawer (slides over from the right) ── */}
-      {draft && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end"
-          role="dialog"
-          aria-modal="true"
-          aria-label={draft.id === "new" ? "Add account" : "Edit account"}
-          // Escape closes the drawer.
-          onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
-        >
-          {/* Scrim — clicking it closes the drawer */}
-          <button aria-label="Close" tabIndex={-1} onClick={() => setDraft(null)} className="absolute inset-0 bg-navy/45" />
+      <Fab label="Add account" icon={<Plus className="h-5 w-5" />} onClick={openNew} />
 
-          <aside className="relative flex h-full w-full max-w-[520px] flex-col border-l border-border bg-bg shadow-modal">
-            <header className="flex items-start justify-between gap-3 border-b border-border px-6 py-5">
-              <div>
-                <p className={capsLabel}>Account drawer</p>
-                <h2 className="mt-1 text-headline-sm text-ink">{draft.id === "new" ? "Add a new account" : "Edit account permissions"}</h2>
+      {/* ── Account sheet (bottom sheet on phones, dialog on desktop) ── */}
+      <BottomSheet
+        open={draft !== null}
+        onClose={closeSheet}
+        eyebrow="Account"
+        title={sheet?.id === "new" ? "Add a new account" : "Edit account permissions"}
+        footer={
+          confirmDelete && editingUser ? (
+            // The "are you sure?" step replaces the normal buttons.
+            <div className="flex w-full flex-col gap-3">
+              <p role="alert" className="text-body-sm text-ink">
+                Delete {editingUser.name}&apos;s login? They won&apos;t be able to sign in. Their employee record is kept.
+              </p>
+              <div className="flex gap-2 md:justify-end">
+                <button type="button" onClick={() => setConfirmDelete(false)} className={`${buttonClass("secondary")} flex-1 md:flex-none`}>
+                  Keep account
+                </button>
+                <button type="button" onClick={remove} disabled={isPending} className={`${buttonClass("danger")} flex-1 md:flex-none`}>
+                  {isPending ? "Deleting…" : "Delete login"}
+                </button>
               </div>
-              <button
-                onClick={() => setDraft(null)}
-                aria-label="Close"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border bg-surface text-ink-muted transition-colors hover:text-ink"
-              >
-                <X className="h-4 w-4" />
+            </div>
+          ) : (
+            <>
+              {editingUser && !isSelf && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={isPending}
+                  aria-label="Delete account"
+                  className={`${buttonClass("ghost")} px-3.5 text-critical hover:bg-critical/10 hover:text-critical`}
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden />
+                  {/* Icon-only on narrow phones so three buttons fit */}
+                  <span className="hidden sm:inline">Delete</span>
+                </button>
+              )}
+              <button type="button" onClick={closeSheet} className={`${buttonClass("secondary")} flex-1 md:ml-auto md:flex-none`}>
+                Cancel
               </button>
-            </header>
-
-            <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6">
-              {/* Identity card */}
-              <div className="flex items-center gap-4 rounded-xl border border-border bg-surface p-4">
-                <Avatar name={draft.name} department={linkedEmp?.department ?? null} size="h-12 w-12 text-body-md" />
-                <div className="min-w-0">
-                  <p className="truncate text-label-md font-semibold text-ink">{draft.id === "new" ? "New account" : draft.name || "Unnamed"}</p>
-                  <p className="truncate text-body-sm text-ink-muted">
-                    {draft.id === "new" ? "They'll sign in with this email and password" : draft.email}
-                  </p>
-                  {editingUser && <p className="tnum text-body-sm text-ink-faint">Created {formatDate(editingUser.createdAt)}</p>}
-                </div>
-              </div>
-
-              {/* Name + email */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="u-name" className={label}>
-                    Full name
-                  </label>
-                  <input id="u-name" className={input} value={draft.name} onChange={(e) => set({ name: e.target.value })} />
-                </div>
-                <div>
-                  <label htmlFor="u-email" className={label}>
-                    Sign-in email
-                  </label>
-                  <input id="u-email" type="email" className={input} value={draft.email} onChange={(e) => set({ email: e.target.value })} />
-                </div>
-              </div>
-
-              {/* Role picker */}
-              <fieldset>
-                <legend className={`mb-3 ${capsLabel}`}>Assign system role</legend>
-                <div className="space-y-2.5">
-                  {ROLES.map((r) => {
-                    const checked = draft.role === r;
-                    // Server rule: you can't remove your OWN Admin role (no lock-out).
-                    const locked = isSelf && r !== "Admin";
-                    return (
-                      <label
-                        key={r}
-                        className={[
-                          "flex cursor-pointer items-start gap-3 rounded-xl border bg-surface p-4 transition-colors",
-                          checked ? "border-ink ring-1 ring-ink" : "border-border hover:border-border-strong",
-                          locked ? "cursor-not-allowed opacity-50" : "",
-                        ].join(" ")}
-                      >
-                        <input
-                          type="radio"
-                          name="role"
-                          value={r}
-                          checked={checked}
-                          disabled={locked}
-                          onChange={() => set({ role: r })}
-                          className="mt-0.5 h-4 w-4 accent-(--color-ink)"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center justify-between gap-2 text-label-md font-semibold text-ink">
-                            {r}
-                            {editingUser?.role === r && <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">Current</span>}
-                          </span>
-                          <span className="block text-body-sm text-ink-muted">{ROLE_INFO[r]}</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-                {isSelf && <p className="mt-2 text-body-sm text-ink-muted">You can&apos;t remove your own Admin role, so you can&apos;t lock yourself out.</p>}
-              </fieldset>
-
-              {/* Linked employee */}
-              <div className="border-t border-border pt-6">
-                <label htmlFor="u-emp" className={label}>
-                  Linked employee profile
-                </label>
-                <select id="u-emp" className={input} value={draft.employeeId} onChange={(e) => set({ employeeId: e.target.value })}>
-                  <option value="">Not linked</option>
-                  {linkOptions.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}
-                    </option>
-                  ))}
-                </select>
-                {linkedEmp ? (
-                  <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-surface p-3">
-                    <Avatar name={linkedEmp.name} department={linkedEmp.department} size="h-8 w-8 text-[10px]" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-label-md text-ink">{linkedEmp.name}</p>
-                      <p className="truncate text-body-sm text-ink-muted">
-                        {linkedEmp.title}
-                        {linkedEmp.department ? ` · ${linkedEmp.department}` : ""}
-                      </p>
-                    </div>
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-good" />
-                  </div>
-                ) : (
-                  <p className="mt-2 text-body-sm text-ink-muted">Link a profile so they can see their own leave, attendance, payslips and reviews.</p>
-                )}
-              </div>
-
-              {/* Password */}
-              <div className="border-t border-border pt-6">
-                <label htmlFor="u-pw" className={label}>
-                  {draft.id === "new" ? "Starting password" : "Reset password"}
-                </label>
-                <div className="relative">
-                  <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-                  <input
-                    id="u-pw"
-                    type={showPw ? "text" : "password"}
-                    autoComplete="new-password"
-                    className={`${input} pl-9 pr-10`}
-                    value={draft.password}
-                    onChange={(e) => set({ password: e.target.value })}
-                    placeholder={draft.id === "new" ? "At least 8 characters" : "Leave blank to keep their current password"}
-                  />
-                  <button type="button" onClick={() => setShowPw((s) => !s)} aria-label={showPw ? "Hide password" : "Show password"} className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-ink-faint hover:text-ink">
-                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {msg && (
-                <p role={msg.ok ? "status" : "alert"} className={`rounded-lg border px-3 py-2 text-body-sm ${msg.ok ? "border-good/30 bg-good/10 text-good" : "border-critical/40 bg-critical/10 text-critical"}`}>
-                  {msg.text}
+              <button type="submit" form="account-form" disabled={isPending} className={`${buttonClass("navy")} flex-1 md:flex-none`}>
+                {isPending ? "Saving…" : sheet?.id === "new" ? "Create account" : "Save changes"}
+              </button>
+            </>
+          )
+        }
+      >
+        {sheet && (
+          <form
+            id="account-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save();
+            }}
+            className="space-y-7"
+          >
+            {/* Identity card */}
+            <div className="flex items-center gap-4 rounded-xl border border-border bg-bg p-4">
+              <Avatar name={sheet.name} department={linkedEmp?.department ?? null} size="h-12 w-12 text-body-md" />
+              <div className="min-w-0">
+                <p className="truncate text-label-md font-semibold text-ink">{sheet.id === "new" ? "New account" : sheet.name || "Unnamed"}</p>
+                <p className="truncate text-body-sm text-ink-muted">
+                  {sheet.id === "new" ? "They'll sign in with this email and password" : sheet.email}
                 </p>
+                {editingUser && <p className="tnum text-body-sm text-ink-faint">Created {formatDate(editingUser.createdAt)}</p>}
+              </div>
+            </div>
+
+            {/* Name + email (one column on phones) */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Full name" htmlFor="u-name">
+                <input
+                  id="u-name"
+                  data-autofocus={sheet.id === "new" ? true : undefined}
+                  className={inputClass}
+                  autoComplete="off"
+                  value={sheet.name}
+                  onChange={(e) => set({ name: e.target.value })}
+                />
+              </Field>
+              <Field label="Sign-in email" htmlFor="u-email">
+                <input
+                  id="u-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  className={inputClass}
+                  value={sheet.email}
+                  onChange={(e) => set({ email: e.target.value })}
+                />
+              </Field>
+            </div>
+
+            {/* Role picker */}
+            <fieldset>
+              <legend className={`mb-3 ${capsLabel}`}>Assign system role</legend>
+              <div className="space-y-2.5">
+                {ROLES.map((r) => {
+                  const checked = sheet.role === r;
+                  // Server rule: you can't remove your OWN Admin role (no lock-out).
+                  const locked = isSelf && r !== "Admin";
+                  return (
+                    <label
+                      key={r}
+                      className={[
+                        "flex cursor-pointer items-start gap-3 rounded-xl border bg-surface p-4 transition-colors",
+                        checked ? "border-ink ring-1 ring-ink" : "border-border hover:border-border-strong",
+                        locked ? "cursor-not-allowed opacity-50" : "",
+                      ].join(" ")}
+                    >
+                      <input
+                        type="radio"
+                        name="role"
+                        value={r}
+                        checked={checked}
+                        disabled={locked}
+                        onChange={() => set({ role: r })}
+                        className="mt-0.5 h-4 w-4 accent-(--color-ink)"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between gap-2 text-label-md font-semibold text-ink">
+                          {r}
+                          {editingUser?.role === r && <span className="text-eyebrow uppercase text-ink-muted">Current</span>}
+                        </span>
+                        <span className="block text-body-sm text-ink-muted">{ROLE_INFO[r]}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {isSelf && <p className="mt-2 text-body-sm text-ink-muted">You can&apos;t remove your own Admin role, so you can&apos;t lock yourself out.</p>}
+            </fieldset>
+
+            {/* Linked employee */}
+            <div className="border-t border-border pt-6">
+              <label htmlFor="u-emp" className={label}>
+                Linked employee profile
+              </label>
+              <select id="u-emp" className={`${inputClass} cursor-pointer`} value={sheet.employeeId} onChange={(e) => set({ employeeId: e.target.value })}>
+                <option value="">Not linked</option>
+                {linkOptions.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+              {linkedEmp ? (
+                <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-bg p-3">
+                  <Avatar name={linkedEmp.name} department={linkedEmp.department} size="h-8 w-8 text-label-sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-label-md text-ink">{linkedEmp.name}</p>
+                    <p className="truncate text-body-sm text-ink-muted">
+                      {linkedEmp.title}
+                      {linkedEmp.department ? ` · ${linkedEmp.department}` : ""}
+                    </p>
+                  </div>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-good" aria-label="Linked" />
+                </div>
+              ) : (
+                <p className="mt-2 text-body-sm text-ink-muted">Link a profile so they can see their own leave, attendance, payslips and reviews.</p>
               )}
             </div>
 
-            <footer className="flex items-center justify-between gap-2 border-t border-border bg-surface px-6 py-4">
-              {editingUser && !isSelf ? (
-                <button onClick={remove} disabled={isPending} className="inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-label-md text-critical transition-colors hover:bg-critical/10 disabled:opacity-50">
-                  <Trash2 className="h-4 w-4" /> Delete
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex gap-2">
-                <button onClick={() => setDraft(null)} className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg">
-                  Cancel
-                </button>
+            {/* Password */}
+            <div className="border-t border-border pt-6">
+              <label htmlFor="u-pw" className={label}>
+                {sheet.id === "new" ? "Starting password" : "Reset password"}
+              </label>
+              <div className="relative">
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
+                <input
+                  id="u-pw"
+                  type={showPw ? "text" : "password"}
+                  autoComplete="new-password"
+                  className={`${inputClass} pl-9 pr-12`}
+                  value={sheet.password}
+                  onChange={(e) => set({ password: e.target.value })}
+                  placeholder={sheet.id === "new" ? "At least 8 characters" : "Leave blank to keep their current password"}
+                />
                 <button
-                  onClick={save}
-                  disabled={isPending}
-                  className="h-10 rounded-full bg-navy px-5 text-label-md font-semibold text-on-navy transition-colors hover:bg-navy-2 disabled:opacity-60"
+                  type="button"
+                  onClick={() => setShowPw((s) => !s)}
+                  aria-label={showPw ? "Hide password" : "Show password"}
+                  aria-pressed={showPw}
+                  className="absolute right-0 top-1/2 grid size-tap -translate-y-1/2 place-items-center rounded-full text-ink-faint hover:text-ink lg:right-1 lg:size-9"
                 >
-                  {isPending ? "Saving…" : draft.id === "new" ? "Create account" : "Save changes"}
+                  {showPw ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
                 </button>
               </div>
-            </footer>
-          </aside>
-        </div>
-      )}
+            </div>
+
+            {msg && (
+              <p role={msg.ok ? "status" : "alert"} className={`rounded-lg border px-3 py-2 text-body-sm ${msg.ok ? "border-good/30 bg-good/10 text-good" : "border-critical/40 bg-critical/10 text-critical"}`}>
+                {msg.text}
+              </p>
+            )}
+          </form>
+        )}
+      </BottomSheet>
     </div>
   );
 }

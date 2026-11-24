@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
 import { JOB_STATUSES, EMPLOYMENT_TYPES, type JobRow, type JobInput } from "@/lib/recruitment";
+import BottomSheet from "@/components/ui/BottomSheet";
+import { Field, FieldGrid, FormError, inputClass, textareaClass } from "@/components/ui/form";
+import { buttonClass } from "@/components/ui/button";
 
 type DeptOption = { id: string; name: string };
 
@@ -15,6 +17,13 @@ const emptyForm = {
   description: "",
 };
 
+const FORM_ID = "job-form";
+
+/*
+  "Post a job" / "Edit job" form, in a BottomSheet (bottom sheet on phones,
+  centred dialog from md up). The footer buttons are outside the <form>, so
+  the submit button points back at it with form={FORM_ID}.
+*/
 export default function JobFormModal({
   open,
   editing,
@@ -54,15 +63,6 @@ export default function JobFormModal({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   function update(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -86,118 +86,89 @@ export default function JobFormModal({
     );
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-border-strong focus:border-ink focus:ring-1 focus:ring-ink";
-
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-navy/45" onClick={onClose} />
-
-      <div role="dialog" aria-modal="true" className="relative flex h-full w-full max-w-md flex-col border-l border-border-strong bg-surface-2 shadow-modal">
-        <div className="flex items-center justify-between border-b border-border px-5 h-16">
-          <h2 className="text-headline-sm text-ink">{editing ? "Edit job" : "New job"}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-surface hover:text-ink"
-          >
-            <X className="h-4 w-4" />
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      eyebrow="Recruitment"
+      title={editing ? "Edit job" : "New job"}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={`${buttonClass("secondary")} flex-1 md:ml-auto md:flex-none`}>
+            Cancel
           </button>
-        </div>
+          <button type="submit" form={FORM_ID} className={`${buttonClass("primary")} flex-1 md:flex-none`}>
+            {editing ? "Save changes" : "Create job"}
+          </button>
+        </>
+      }
+    >
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="space-y-4">
+        <Field label="Job title" required>
+          <input
+            data-autofocus
+            autoComplete="off"
+            className={inputClass}
+            value={form.title}
+            onChange={(e) => update("title", e.target.value)}
+            placeholder="e.g. Senior Frontend Engineer"
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex-1 space-y-4 p-5">
-            <Field label="Job title">
-              <input
-                className={inputClass}
-                value={form.title}
-                onChange={(e) => update("title", e.target.value)}
-                placeholder="e.g. Senior Frontend Engineer"
-              />
-            </Field>
+        {/* One field per line on phones, two side by side from sm up */}
+        <FieldGrid>
+          <Field label="Department">
+            <select className={inputClass} value={form.departmentId} onChange={(e) => update("departmentId", e.target.value)}>
+              <option value="">—</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-            <Field label="Department">
-              <select
-                className={inputClass}
-                value={form.departmentId}
-                onChange={(e) => update("departmentId", e.target.value)}
-              >
-                <option value="">—</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </Field>
+          <Field label="Location">
+            <input
+              autoComplete="off"
+              className={inputClass}
+              value={form.location}
+              onChange={(e) => update("location", e.target.value)}
+              placeholder="e.g. Remote, New York"
+            />
+          </Field>
 
-            <Field label="Location">
-              <input
-                className={inputClass}
-                value={form.location}
-                onChange={(e) => update("location", e.target.value)}
-                placeholder="e.g. Remote, New York"
-              />
-            </Field>
+          <Field label="Type">
+            <select className={inputClass} value={form.type} onChange={(e) => update("type", e.target.value)}>
+              {EMPLOYMENT_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Status">
+            <select className={inputClass} value={form.status} onChange={(e) => update("status", e.target.value)}>
+              {JOB_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </FieldGrid>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Type">
-                <select className={inputClass} value={form.type} onChange={(e) => update("type", e.target.value)}>
-                  {EMPLOYMENT_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Status">
-                <select className={inputClass} value={form.status} onChange={(e) => update("status", e.target.value)}>
-                  {JOB_STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </Field>
-            </div>
+        <Field label="Description">
+          <textarea
+            className={`${textareaClass} resize-y`}
+            value={form.description}
+            onChange={(e) => update("description", e.target.value)}
+            placeholder="Role summary, requirements…"
+          />
+        </Field>
 
-            <Field label="Description">
-              <textarea
-                className={`${inputClass} min-h-24 resize-y`}
-                value={form.description}
-                onChange={(e) => update("description", e.target.value)}
-                placeholder="Role summary, requirements…"
-              />
-            </Field>
-
-            {error && (
-              <p role="alert" className="rounded-lg border border-critical/40 bg-critical/10 px-3 py-2 text-body-sm text-critical">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 border-t border-border p-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="h-10 rounded-full border border-border bg-surface px-5 text-label-md text-ink transition-colors hover:bg-bg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="h-10 rounded-full bg-accent px-5 text-label-md text-on-accent transition-colors hover:bg-accent-hover active:bg-accent-pressed"
-            >
-              {editing ? "Save changes" : "Create job"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.06em] text-ink-muted">{label}</span>
-      {children}
-    </label>
+        {error && <FormError>{error}</FormError>}
+      </form>
+    </BottomSheet>
   );
 }

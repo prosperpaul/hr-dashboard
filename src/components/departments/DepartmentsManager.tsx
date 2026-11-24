@@ -23,6 +23,11 @@ import {
 } from "@/lib/department-actions";
 import { deptTint } from "@/lib/dept-tint";
 import DepartmentFormModal from "./DepartmentFormModal";
+import FilterBar from "@/components/ui/FilterBar";
+import Fab from "@/components/ui/Fab";
+import { buttonClass } from "@/components/ui/button";
+import { inputClass } from "@/components/ui/form";
+import ConfirmSheet, { type Confirmation } from "@/components/employees/ConfirmSheet";
 
 // Everything one department card shows. Built on the server (page.tsx).
 export type DeptCard = DepartmentRow & {
@@ -57,7 +62,7 @@ function monthYear(ymd: string): string {
   return `${MONTHS[Number(m) - 1] ?? ""} ${y}`.trim();
 }
 
-const CAPS = "text-[11px] font-bold uppercase tracking-[0.06em]";
+const CAPS = "text-eyebrow uppercase";
 
 // One figure in the white metrics band under the header.
 function Metric({ label, value, note, good }: { label: string; value: string; note?: string; good?: boolean }) {
@@ -87,6 +92,7 @@ export default function DepartmentsManager({
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("head-desc");
   const [isPending, startTransition] = useTransition();
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   // ── Headline numbers (all from real data) ─────────────────────────
   const assigned = departments.reduce((s, d) => s + d.employeeCount, 0);
@@ -141,14 +147,21 @@ export default function DepartmentsManager({
       dept.employeeCount > 0
         ? `${dept.name} has ${dept.employeeCount} employee(s). Deleting it won't remove them, but they'll no longer belong to a department. Continue?`
         : `Delete the ${dept.name} department?`;
-    if (!window.confirm(warn)) return;
-    startTransition(async () => {
-      try {
-        await deleteDepartment(dept.id);
-        router.refresh();
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : "Could not delete this department.");
-      }
+    // Ask first in a small sheet (instead of the browser's confirm box).
+    setConfirmation({
+      title: `Delete ${dept.name}?`,
+      message: warn,
+      confirmLabel: "Delete department",
+      danger: true,
+      onConfirm: () =>
+        startTransition(async () => {
+          try {
+            await deleteDepartment(dept.id);
+            router.refresh();
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : "Could not delete this department.");
+          }
+        }),
     });
   }
 
@@ -177,7 +190,8 @@ export default function DepartmentsManager({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="pb-20 lg:pb-0 space-y-6">
+      {/* pb-20: room so the floating Fab never covers the last item on phones */}
       {/* ── Editorial header ── */}
       <header className="flex flex-col justify-between gap-5 border-b border-border pb-6 xl:flex-row xl:items-end">
         <div className="max-w-3xl">
@@ -197,53 +211,61 @@ export default function DepartmentsManager({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search box (filters the cards below) */}
-          <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter departments…"
-              aria-label="Filter departments"
-              className="h-10 w-full rounded-full border border-border bg-surface pl-9 pr-3 text-body-sm text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-ink focus:ring-1 focus:ring-ink"
-            />
-          </div>
-          <select
-            aria-label="Sort departments"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="h-10 rounded-full border border-border bg-surface px-3 text-label-md text-ink outline-none transition-colors hover:bg-bg focus:border-ink focus:ring-1 focus:ring-ink"
+        {/* Phones: search + a "Sort" button (the sort menu lives in its sheet),
+            then Export at full width ("Add" is the floating Fab below lg). Desktop: one row. */}
+        <div className="flex min-w-0 flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
+          <FilterBar
+            title="Sort"
+            activeCount={sort === "head-desc" ? 0 : 1}
+            onReset={() => setSort("head-desc")}
+            search={
+              <div className="relative w-full md:w-56">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
+                <input
+                  type="search"
+                  autoComplete="off"
+                  enterKeyHint="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter departments…"
+                  aria-label="Filter departments"
+                  className={`${inputClass.replace("px-3.5", "pl-9 pr-3").replace("lg:min-h-11", "lg:min-h-10")} rounded-full`}
+                />
+              </div>
+            }
           >
-            {Object.entries(SORTS).map(([key, s]) => (
-              <option key={key} value={key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={exportCsv}
-            disabled={n === 0}
-            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-surface px-4 text-label-md text-ink transition-colors hover:bg-bg disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
-          {canManage && (
-            <button
-              onClick={openAdd}
-              disabled={isPending}
-              className="inline-flex h-10 items-center gap-2 rounded-full bg-accent px-5 text-label-md font-semibold text-on-accent transition-colors hover:bg-accent-hover disabled:opacity-60"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Add department
+            <label className="flex flex-col gap-1.5">
+              <span className="text-label-md text-ink md:sr-only">Sort departments</span>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className={`${inputClass.replace("lg:min-h-11", "lg:min-h-10")} cursor-pointer md:w-auto md:rounded-full md:text-label-md`}
+              >
+                {Object.entries(SORTS).map(([key, s]) => (
+                  <option key={key} value={key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </FilterBar>
+          <div className="flex gap-2 [&>*]:flex-1 md:[&>*]:flex-none">
+            <button type="button" onClick={exportCsv} disabled={n === 0} className={buttonClass("secondary")}>
+              <Download className="h-4 w-4" aria-hidden />
+              Export CSV
             </button>
-          )}
+            {canManage && (
+              <button type="button" onClick={openAdd} disabled={isPending} className={`${buttonClass("primary")} max-lg:hidden`}>
+                <PlusCircle className="h-4 w-4" aria-hidden />
+                Add department
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
       {/* ── Metrics band ── */}
-      <section className="grid grid-cols-2 gap-x-4 gap-y-5 rounded-xl border border-border bg-surface px-5 py-4 md:grid-cols-4">
+      <section className="grid grid-cols-2 gap-x-4 gap-y-5 rounded-xl border border-border bg-surface px-4 py-4 md:grid-cols-4 md:px-5">
         <Metric
           label="Total headcount"
           value={String(totalEmployees)}
@@ -276,7 +298,7 @@ export default function DepartmentsManager({
               {/* Thin department-colour bar across the top */}
               <div className={`h-2.5 w-full ${tint}`} />
 
-              <div className="flex flex-1 flex-col p-5">
+              <div className="flex min-w-0 flex-1 flex-col p-4 md:p-5">
                 {/* Name + member count */}
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -318,7 +340,7 @@ export default function DepartmentsManager({
 
                 {/* Longest-serving member (real data; there's no "head of department" field) */}
                 {d.veteran && (
-                  <div className="mb-5 flex items-center gap-3 rounded-xl border border-border p-3">
+                  <div className="mb-5 flex items-center gap-3 rounded-lg bg-sunken p-3 lg:rounded-xl lg:border lg:border-border lg:bg-transparent">
                     <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tint} text-label-md font-semibold text-ink`}>
                       {d.veteran.initials}
                     </span>
@@ -327,8 +349,8 @@ export default function DepartmentsManager({
                       <p className="truncate text-body-sm text-ink-muted">{d.veteran.role}</p>
                     </div>
                     <span className="flex shrink-0 flex-col items-end text-right" title="Longest-serving member">
-                      <Award className="h-4 w-4 text-accent-ink" />
-                      <span className="tnum mt-0.5 text-[11px] text-ink-muted">Since {monthYear(d.veteran.since)}</span>
+                      <Award className="h-4 w-4 text-accent-ink" aria-hidden />
+                      <span className="tnum mt-0.5 text-label-sm text-ink-muted">Since {monthYear(d.veteran.since)}</span>
                     </span>
                   </div>
                 )}
@@ -359,29 +381,32 @@ export default function DepartmentsManager({
               </div>
 
               {/* Footer strip: unit number + actions */}
-              <div className="flex items-center justify-between gap-2 border-t border-border bg-bg px-5 py-3">
+              <div className="flex items-center justify-between gap-2 border-t border-border bg-bg px-4 py-1 md:px-5 lg:py-3">
                 <span className={`${CAPS} text-ink-muted`}>Unit #{unitNo.get(d.id)}</span>
                 {canManage ? (
                   <div className="flex items-center gap-1">
+                    {/* 48px targets on touch screens, compact from lg up */}
                     <button
+                      type="button"
                       onClick={() => openEdit(d)}
                       disabled={isPending}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-label-md text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
+                      className="inline-flex min-h-tap items-center lg:min-h-8 gap-1.5 rounded-full px-3 text-label-md text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
                     >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
+                      <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDelete(d)}
                       disabled={isPending}
                       aria-label={`Delete ${d.name}`}
-                      className="grid h-8 w-8 place-items-center rounded-full text-ink-muted transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50"
+                      className="grid size-tap place-items-center rounded-full text-ink-muted lg:size-8 transition-colors hover:bg-critical/10 hover:text-critical disabled:opacity-50"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     </button>
                   </div>
                 ) : (
-                  <Link href="/employees" className="inline-flex items-center gap-1 text-label-md text-ink hover:underline">
-                    View directory <ArrowRight className="h-4 w-4" />
+                  <Link href="/employees" className="inline-flex min-h-tap items-center gap-1 text-label-md text-ink hover:underline lg:min-h-0">
+                    View directory <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                 )}
               </div>
@@ -392,12 +417,13 @@ export default function DepartmentsManager({
         {/* "Add a department" tile (managers only, hidden while filtering) */}
         {canManage && !q && (
           <button
+            type="button"
             onClick={openAdd}
             disabled={isPending}
             className="group flex min-h-72 flex-col items-center justify-center rounded-xl border border-dashed border-border-strong p-5 text-center transition-colors hover:bg-surface"
           >
             <span className="grid h-11 w-11 place-items-center rounded-full bg-accent text-on-accent transition-colors group-hover:bg-accent-hover">
-              <Plus className="h-5 w-5" />
+              <Plus className="h-5 w-5" aria-hidden />
             </span>
             <span className="mt-3 text-headline-sm text-ink">Establish a new unit</span>
             <span className="mt-1 max-w-56 text-body-sm text-ink-muted">Create a department, then assign people to it from Employees.</span>
@@ -410,7 +436,7 @@ export default function DepartmentsManager({
         <div className="grid place-items-center rounded-xl border border-border bg-surface py-16 text-center">
           <div>
             <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-2">
-              <Building2 className="h-5 w-5 text-ink-faint" />
+              <Building2 className="h-5 w-5 text-ink-faint" aria-hidden />
             </div>
             <p className="mt-3 text-headline-sm text-ink">{q ? "No matching departments" : "No departments yet"}</p>
             <p className="mt-1 text-body-md text-ink-muted">
@@ -420,6 +446,9 @@ export default function DepartmentsManager({
         </div>
       )}
 
+      {/* Phones/tablets: "Add department" floats above the tab bar instead of sitting in the header */}
+      {canManage && <Fab label="Add department" icon={<Plus className="h-5 w-5" />} onClick={openAdd} />}
+      <ConfirmSheet confirmation={confirmation} onClose={() => setConfirmation(null)} />
       <DepartmentFormModal open={modalOpen} editing={editing} onClose={() => setModalOpen(false)} onSave={handleSave} />
     </div>
   );

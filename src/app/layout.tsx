@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -17,6 +17,23 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "HR Dashboard",
   description: "A modern dashboard for managing people, teams, and HR operations.",
+};
+
+/*
+  Phone viewport settings.
+  • viewportFit "cover" lets the page reach under the notch / home bar, so
+    our safe-area padding (env(safe-area-inset-*)) can place things properly.
+  • themeColor tints the phone's browser bar navy, to run into the navy top bar.
+  We deliberately do NOT block pinch-zoom (accessibility).
+*/
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#101b3a" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a1128" },
+  ],
 };
 
 export default function RootLayout({

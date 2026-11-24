@@ -21,20 +21,30 @@ const subscribe = (onChange: () => void) => {
 };
 const getTheme = () => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
+/** The current theme, kept in sync with <html data-theme>. ("light" on the server.) */
+export function useTheme(): "light" | "dark" {
+  return useSyncExternalStore(subscribe, getTheme, () => "light");
+}
+
+/** Switch theme and remember the choice in this browser. */
+export function setTheme(theme: "light" | "dark") {
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem("theme", theme);
+  } catch {
+    /* storage blocked (private mode) — the switch still works for this visit */
+  }
+}
+
 export default function ThemeToggle({ className = "" }: { className?: string }) {
   // On the server we can't know the theme, so render the default "light"
   // icon there; React corrects it right after load.
-  const theme = useSyncExternalStore(subscribe, getTheme, () => "light");
+  const theme = useTheme();
   const next = theme === "light" ? "dark" : "light";
+  const toggle = () => setTheme(next);
 
-  function toggle() {
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem("theme", next);
-    } catch {
-      /* storage blocked (private mode) — the switch still works for this visit */
-    }
-  }
+  // Callers can pass their own size (e.g. "size-tap" on phones); otherwise 36px.
+  const sizing = /(^|\s)(size-|h-)/.test(className) ? "" : "h-9 w-9";
 
   return (
     <button
@@ -42,9 +52,9 @@ export default function ThemeToggle({ className = "" }: { className?: string }) 
       onClick={toggle}
       aria-label={`Switch to ${next} mode`}
       title={`Switch to ${next} mode`}
-      className={`grid h-9 w-9 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink ${className}`}
+      className={`grid ${sizing} place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink ${className}`}
     >
-      {theme === "light" ? <Moon className="h-[18px] w-[18px]" /> : <Sun className="h-[18px] w-[18px]" />}
+      {theme === "light" ? <Moon className="h-[18px] w-[18px]" aria-hidden /> : <Sun className="h-[18px] w-[18px]" aria-hidden />}
     </button>
   );
 }

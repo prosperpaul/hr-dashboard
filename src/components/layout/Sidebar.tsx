@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Network } from "lucide-react";
-import { navSections } from "@/lib/nav";
+import { visibleSections, isActivePath } from "@/lib/nav";
+import { initialsOf } from "@/lib/initials";
 import { logout } from "@/lib/auth-actions";
 
 // The bits of the logged-in user the sidebar needs to display.
@@ -12,17 +13,6 @@ type SidebarUser = {
   email?: string | null;
   role?: string | null;
 };
-
-// Turn "Ada Admin" into "AA" for the little avatar circle.
-function initialsOf(name?: string | null): string {
-  if (!name) return "?";
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
 
 export default function Sidebar({
   user,
@@ -37,7 +27,7 @@ export default function Sidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-navy-line bg-navy text-on-navy">
+    <aside className="sticky top-0 hidden h-dvh w-sidebar shrink-0 flex-col border-r border-navy-line bg-navy text-on-navy lg:flex">
       {/* Brand */}
       <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-navy-line px-6">
         <div className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-on-accent">
@@ -47,19 +37,16 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-6 [scrollbar-color:var(--color-navy-line)_transparent]">
-        {navSections.map((section) => (
+      <nav aria-label="Main" className="flex-1 space-y-6 overflow-y-auto px-4 py-6 [scrollbar-color:var(--color-navy-line)_transparent]">
+        {visibleSections(user.role).map((section) => (
           <div key={section.heading}>
-            <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-[0.06em] text-on-navy-muted">
+            <p className="mb-1.5 px-3 text-eyebrow uppercase text-on-navy-muted">
               {section.heading}
             </p>
             <ul className="flex flex-col gap-1">
-              {section.items
-                // Hide admin-only links from non-Admins.
-                .filter((item) => !item.adminOnly || user.role === "Admin")
-                .map((item) => {
+              {section.items.map((item) => {
                   // An item is "active" if the current URL matches its href.
-                  const active = pathname === item.href;
+                  const active = isActivePath(pathname, item.href);
                   const Icon = item.icon;
                   const badge = badges[item.href] ?? 0;
 
@@ -104,7 +91,7 @@ export default function Sidebar({
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             <p className="truncate text-label-md text-on-navy">{user.name ?? "User"}</p>
-            <p className="truncate text-[11px] font-bold uppercase tracking-[0.06em] text-on-navy-muted">{user.role ?? user.email}</p>
+            <p className="truncate text-eyebrow uppercase text-on-navy-muted">{user.role ?? user.email}</p>
           </div>
           {/* Sign out — posts to the `logout` server action, which clears the
               session cookie and redirects to /login. A form (not a link) so it

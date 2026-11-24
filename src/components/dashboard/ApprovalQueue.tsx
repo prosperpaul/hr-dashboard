@@ -50,12 +50,12 @@ export default function ApprovalQueue({ requests }: { requests: PendingLeave[] }
 
   return (
     <div className="space-y-3">
-      {error && <p className="rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-body-sm text-critical">{error}</p>}
+      {error && <p role="alert" className="rounded-lg border border-critical/30 bg-critical/10 px-3 py-2 text-body-sm text-critical">{error}</p>}
 
       {requests.map((r) => (
         <div
           key={r.id}
-          className={`flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 transition-opacity sm:flex-row sm:items-center sm:justify-between ${
+          className={`flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 transition-opacity md:p-5 sm:flex-row sm:items-center sm:justify-between ${
             busyId === r.id ? "opacity-50" : ""
           }`}
         >
@@ -69,17 +69,19 @@ export default function ApprovalQueue({ requests }: { requests: PendingLeave[] }
                 {r.detail} · <span className="tnum">{r.range}</span>
               </p>
               {r.department && (
-                <p className="mt-0.5 truncate text-[11px] font-bold uppercase tracking-[0.06em] text-ink-faint">{r.department}</p>
+                <p className="mt-0.5 truncate text-eyebrow uppercase text-ink-faint">{r.department}</p>
               )}
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* Phones: two full-width halves (easy thumb targets, 48px tall).
+              sm+: the usual pair of pills on the right; compact from lg. */}
+          <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex sm:items-center">
             <button
               type="button"
               disabled={busyId !== null}
               onClick={() => decide(r.id, "Rejected")}
-              className="h-9 rounded-full border border-border bg-surface px-4 text-label-md text-ink transition-colors hover:bg-bg disabled:cursor-not-allowed"
+              className="min-h-tap rounded-full border border-border bg-surface px-4 lg:min-h-0 lg:h-9 text-label-md text-ink transition-colors hover:bg-bg disabled:cursor-not-allowed"
             >
               Decline
             </button>
@@ -87,7 +89,7 @@ export default function ApprovalQueue({ requests }: { requests: PendingLeave[] }
               type="button"
               disabled={busyId !== null}
               onClick={() => decide(r.id, "Approved")}
-              className="h-9 rounded-full bg-navy px-4 text-label-md text-on-navy transition-opacity hover:opacity-90 disabled:cursor-not-allowed"
+              className="min-h-tap rounded-full bg-navy px-4 lg:min-h-0 lg:h-9 text-label-md text-on-navy transition-opacity hover:opacity-90 disabled:cursor-not-allowed"
             >
               Approve
             </button>
