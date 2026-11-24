@@ -15,7 +15,18 @@
   Pure module: safe to import from both server and browser code.
 */
 
-export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+/*
+  ▶ VETTING SWITCH — while people are testing the project, this is `true`:
+    the login page shows the test accounts + password and one-click role
+    buttons, and the shared accounts can't change passwords or manage logins.
+    When vetting is over, change it to `false` (and push) to hide all of it.
+*/
+export const VETTING_MODE = true;
+
+export const DEMO_MODE = VETTING_MODE || process.env.NEXT_PUBLIC_DEMO_MODE === "true";
+
+// The password every test account uses (shown on the login page while vetting).
+export const DEMO_PASSWORD_HINT = "password123";
 
 export type DemoRole = "Admin" | "HR" | "Manager" | "Employee";
 

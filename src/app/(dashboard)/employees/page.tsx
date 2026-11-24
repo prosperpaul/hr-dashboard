@@ -6,7 +6,17 @@ import EmployeesManager from "@/components/employees/EmployeesManager";
 import type { Employee, EmployeeStatus } from "@/lib/sample-data";
 
 // This runs on the SERVER before the page is sent to the browser.
-export default async function EmployeesPage() {
+// `searchParams` = the ?q=… part of the URL. The top-bar search box sends
+// people here with their search text, e.g. /employees?q=amara.
+export default async function EmployeesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = await searchParams;
+  const q = typeof params.q === "string" ? params.q.trim() : "";
+  const focusSearch = params.search === "1";
+
   // Who's viewing, and are they allowed to edit? (Same rule the server
   // actions enforce — imported from one shared place.)
   const session = await auth();
@@ -41,6 +51,10 @@ export default async function EmployeesPage() {
 
   return (
     <EmployeesManager
+      // A new search remounts the list so it starts from the new text.
+      key={q}
+      initialQuery={q}
+      focusSearch={focusSearch}
       employees={employees}
       departments={departments}
       canManage={canManage}

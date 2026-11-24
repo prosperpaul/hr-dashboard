@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { login, demoLogin } from "@/lib/auth-actions";
-import { DEMO_MODE, DEMO_ACCOUNTS } from "@/lib/demo";
+import { DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD_HINT } from "@/lib/demo";
 import { ROLES } from "@/lib/permissions";
 import ThemeToggle from "@/components/ThemeToggle";
 import { inputClass as fieldClass } from "@/components/ui/form";
@@ -300,6 +300,27 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Test logins — shown while the project is being vetted (VETTING_MODE in
+              src/lib/demo.ts). Plain text so testers can read or copy them. */}
+          {DEMO_MODE && (
+            <section aria-labelledby="test-logins" className="mt-6 rounded-xl border border-border bg-surface p-4">
+              <h3 id="test-logins" className="text-eyebrow uppercase text-accent-ink">
+                Test login details
+              </h3>
+              <p className="mt-1 text-body-sm text-ink-muted">
+                Password for every account: <span className="tnum font-semibold text-ink select-all">{DEMO_PASSWORD_HINT}</span>
+              </p>
+              <dl className="mt-3 divide-y divide-border">
+                {DEMO_ACCOUNTS.map((a) => (
+                  <div key={a.role} className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-2">
+                    <dt className="text-label-md text-ink">{a.role}</dt>
+                    <dd className="min-w-0 text-body-sm text-ink-muted select-all [overflow-wrap:anywhere]">{a.email}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
           {/* Demo note — development only */}
           {isDev && (

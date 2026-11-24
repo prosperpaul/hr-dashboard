@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Form from "next/form";
 import { Search, Plus, Network } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "./NotificationBell";
@@ -38,26 +39,30 @@ export default function Topbar({
         <span className="font-display truncate text-headline-sm text-on-navy">HR Dashboard</span>
       </Link>
 
-      {/* Search box (desktop) */}
-      <div className="relative hidden w-72 lg:block" role="search">
+      {/* Search box (desktop). A real form: pressing Enter goes to
+          /employees?q=<text>, where the directory opens already filtered.
+          next/form makes that a fast in-app navigation (no full reload). */}
+      <Form action="/employees" role="search" className="relative hidden w-72 lg:block">
         <label htmlFor="global-search" className="sr-only">
-          Search employees and teams
+          Search people by name, role, email or team
         </label>
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" aria-hidden />
         <input
           id="global-search"
+          name="q"
           type="search"
           autoComplete="off"
-          placeholder="Search employees, teams…"
+          enterKeyHint="search"
+          placeholder="Search people, teams…  ↵"
           className="h-10 w-full rounded-full border border-border bg-bg pl-9 pr-4 text-body-md text-ink placeholder:text-ink-faint outline-none transition-colors focus:border-ink focus:ring-1 focus:ring-ink"
         />
-      </div>
+      </Form>
 
       {/* Right-side actions */}
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-        {/* Phones/tablets: search = jump to the People directory search */}
+        {/* Phones/tablets: opens the People directory with its search box focused */}
         <Link
-          href="/employees"
+          href="/employees?search=1"
           aria-label="Search people"
           className="grid size-tap place-items-center rounded-full text-on-navy transition-colors hover:bg-navy-2 lg:hidden"
         >

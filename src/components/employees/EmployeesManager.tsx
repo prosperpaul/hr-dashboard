@@ -58,6 +58,8 @@ export default function EmployeesManager({
   canManage,
   myEmployeeId,
   today,
+  initialQuery = "",
+  focusSearch = false,
 }: {
   employees: Employee[];
   departments: DeptOption[];
@@ -66,9 +68,11 @@ export default function EmployeesManager({
   canManage: boolean;
   myEmployeeId: string | null; // your own record, tagged "You"
   today: string; // business-time-zone date from the server
+  initialQuery?: string; // ?q=… from the top-bar search
+  focusSearch?: boolean; // ?search=1 — the phone search button opens with the box focused
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [dept, setDept] = useState("All");
   const [status, setStatus] = useState("All");
   const [sort, setSort] = useState<SortKey>("name");
@@ -109,7 +113,14 @@ export default function EmployeesManager({
   // ── Filter, sort, page ────────────────────────────────────────────
   const q = query.trim().toLowerCase();
   const filtered = employees
-    .filter((e) => !q || e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) || e.role.toLowerCase().includes(q))
+    .filter(
+      (e) =>
+        !q ||
+        e.name.toLowerCase().includes(q) ||
+        e.email.toLowerCase().includes(q) ||
+        e.role.toLowerCase().includes(q) ||
+        e.department.toLowerCase().includes(q), // so "engineering" finds that team
+    )
     .filter((e) => dept === "All" || e.department === dept)
     .filter((e) => status === "All" || e.status === status)
     .sort(SORTS[sort].fn);
@@ -394,12 +405,13 @@ export default function EmployeesManager({
                 type="search"
                 autoComplete="off"
                 enterKeyHint="search"
+                autoFocus={focusSearch}
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
                   resetPage();
                 }}
-                placeholder="Search by name, role or email…"
+                placeholder="Search name, role, email or team…"
                 aria-label="Search employees"
                 // A sunken, fully rounded "search pill" on phones/tablets; the boxy field on desktop.
                 className={inputClass.replace("rounded-lg", "rounded-full lg:rounded-lg").replace("px-3.5", "pl-10 pr-4 lg:pl-9").replace("lg:min-h-11", "lg:min-h-10")}
